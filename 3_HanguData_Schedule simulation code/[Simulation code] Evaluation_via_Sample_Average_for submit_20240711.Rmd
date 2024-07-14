@@ -1,0 +1,2212 @@
+---
+title: "Sample Average Evaluation of KPIs for Given a Schedule:cluster_CPS(k=2&k=3) & New_Return"
+# New methord to calculate the weighted std: weighted mean first, then std
+# 20240327: Gender fairness std = p1*std1+p2*std2
+# improvement rate (c1-c2)/c1*100%
+author: "Haolin Feng & Yiwu Jia"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+  html_notebook:
+    theme: united
+    toc: yes
+    toc_depth: 3
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+#rm(list = ls()) #clean the environment
+knitr::opts_chunk$set(echo = TRUE)
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(lfactors))
+library(reshape2,warn.conflicts = FALSE)
+library(ggplot2)
+library(gridExtra)
+library(cowplot)
+library(patchwork)
+library(xtable)
+library(combinat)
+library(tidyr)
+library(reticulate)
+library(reshape2)
+library(cowplot)
+```
+
+```{r}
+# Specify the Python interpreter to use
+use_python("C:/ProgramData/Anaconda3/python.exe")
+py_module <- import("Patient_scheduling_MIP")
+Load_Result_List=FALSE  #we can use the generated data as the input of the Gurobi if necessary.
+```
+
+
+## Basic procedure
+### The backbones
+* Note: currently no-show is not considered. It is relatively easy to modify the code and consider no-show.
+
+```{r}
+# Load all functions defined in this experiment.
+
+# Load all functions defined by Prof.Feng for this experiment.
+source('./Utilities.R')
+# Load functions defined for the main script.
+source('./SimuFun_simple_new_percent.R')
+# Load extension functions defined for the main script.
+source('./Extension.R')
+```
+
+### Data input
+```{r}
+# Load simulated data for HANGU
+
+df <- read.csv('../Generated Data/HANGU_ServiceTime_Simu_Cluster_Tree_Classification_K2K3_model2_55_230806_240307.csv',stringsAsFactors = F) #with "Address"
+sec = 60 # time unit option,if sec = 60,namely the time unit is minute
+df$Duration = df$RealServTime / sec # convert 'RealServTime'(in seconds) to 'Duration'(in minutes)
+df$ServTime = df$ServTime / sec #predicted service time
+#df$Address[df$Address == "Out of province"] <- "Out of city" #optional
+str(df) # describe the data structure
+```
+
+#### Benchmark rule(randomly or FCFS)
+```{r}
+n = 16L #total number of patient
+X_Vec = rep(15*(60/sec), n-1)
+schd_Benchmark = list(Type=rep('General',n), X_Vec = rep(15*(60/sec), n-1)) #benchmark form
+str(schd_Benchmark)#structure of schd_Benchmark
+```
+
+## class:CPS
+##### The statistical information of patients type
+```{r}
+# Notice : set the classification type here
+
+df$Type = df$CPS_K2 # choose the class type CPS as the object classification method
+ClassType1_K2=paste(str_sort(unique(df$Type)),collapse="-")
+
+# show the basic statistical information
+
+#ShowType(df,'ServTime') # patient type and information evaluated by prediction of service time.
+
+ShowType(df,'Duration')  # patient type and information evaluated by real service time.
+```
+### Sample from real data
+##Suppose##
++ we don’t need more than 16 patients in a session
++ we need 10000 replication for simulation
+```{r}
+ServList = Data2ServiceList(df) # to get the Service Time List
+#CommonServTime1_K2 = ServL2ComServT(ServList,seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+GenderList = Data2GenderList(df) # to get the Service Time List
+AddressList = Data2AddressList(df)
+CommonList = SGAList2ComSGList(ServList, GenderList, AddressList, seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+CommonServTime1_K2=CommonList$ServTime
+CommonGender1_K2=CommonList$Gender
+CommonAddress1_K2=CommonList$Address
+
+#CommonServTime1_K20 = ServL2ComServT(ServList,seed=123, n_samp=10000, max_n=16) # FOR CHECK
+```
+
+
+```{r}
+# Benchmark KPI
+schd<-schd_Benchmark
+Gender_Adress_KPI=Schd2Gender_Address_KPI(CommonServTime1_K2,CommonGender1_K2,CommonAddress1_K2,schd)
+# Time related KPI computing
+rKPI=Gender_Adress_KPI$rKPI
+KPI_Benchmark = rKPI2KPIH(schd,rKPI=rKPI,plan_completion = 4*60L*(60/sec),PRINT = T) 
+```
+
+## Simulation data set
+* According to the raw data from HANGU based on real distribution and some assumption,we do the following work.
+
+### Schedule Rules
+
+#### Scenario 11
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [8,8];
+
+#### Scenario 12
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [9,7];
+
+
+
+## Experiment rules
+### CPS
+
+```{r}
+
+# IBFI (individualblock/fixed-interval) rule
+
+### Scenario11 # of[A,B] = [8,8]
+# full sequencing
+loadData=T
+
+if (loadData==F) {
+
+Type1='A'
+Type2='B'
+n1 = 8
+n2 = 8
+start.time <- Sys.time()  
+Scenario11_result=FullSeq2Scenariolist(CommonServTime1_K2,Type1, Type2, n1, n2, X_Vec)
+Scenario11_list_K2<-Scenario11_result$Scenariolist
+df11_FullSeq_K2=Scenario11_result$FullSeq
+end.time <- Sys.time()
+time.taken11 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken11)
+write.csv(df11_FullSeq_K2,file="../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_8_8.csv",row.names = F)
+}else{
+df11_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_8_8.csv",stringsAsFactors = F)
+# working for loaded df_FullSeq file 
+Scenario11_list_K2=list()
+name_list =sapply(df11_FullSeq_K2[['Rule_name']],function(x) strsplit(x,''))
+Scenario11_list_K2$Type <-name_list
+# X_Vec value
+Scenario11_list_K2$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario11_list_K2$Type))
+}
+```
+
+
+```{r}
+### Scenario12
+# of[A,B] = [9,7] 
+
+# full sequencing
+
+if (loadData==F) {
+
+Type1='A'
+Type2='B'
+n1 = 9
+n2 = 7
+start.time <- Sys.time() 
+Scenario12_result=FullSeq2Scenariolist(CommonServTime1_K2,Type1, Type2, n1, n2, X_Vec)
+Scenario12_list_K2<-Scenario12_result$Scenariolist
+df12_FullSeq_K2=Scenario12_result$FullSeq
+end.time <- Sys.time()
+time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken12)
+################################
+time.taken_K2_total=time.taken11+time.taken12
+cat("The runtime of Full_Simu_k2 is:", time.taken_K2_total, "\n")
+K2Full_timeList=list(time11=time.taken11, time12=time.taken12, total=time.taken_K2_total)
+# Converts elements in a list to character types
+K2Full_timeList_as_character <- lapply(K2Full_timeList, as.character)
+# Specifies the file path to be saved locally
+file_path <- "./RawOutput/Runtime/K2Full_timeList.txt"
+# Writes the elements in the list to the file as text, setting the separator to a space
+write.table(K2Full_timeList, file = file_path, col.names = TRUE, sep = " ")
+################################################
+write.csv(df12_FullSeq_K2,file="../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_9_7.csv",row.names = F)
+
+}else{
+df12_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_9_7.csv",stringsAsFactors = F)
+# working for loaded df_FullSeq file 
+Scenario12_list_K2=list()
+name_list =sapply(df12_FullSeq_K2[['Rule_name']],function(x) strsplit(x,''))
+Scenario12_list_K2$Type <-name_list
+# X_Vec value
+Scenario12_list_K2$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario12_list_K2$Type))
+}
+```
+
+
+```{r}
+# The prob of choosing Scenario11,Scenario12,Scenario13 to meet all the patient type healthcare access.
+# calculate the ratio of A,B
+Ratio1 <- RatioCalculation(df,8,8,9,7,n=16)
+p11_K2 <- Ratio1$p1
+p12_K2 <- Ratio1$p2
+```
+
+
+### class:New_Return
+##### The statistical information of patients type
+```{r}
+# Notice : set the classification type here
+df$Type = df$New_Return # choose the class type # Cluster ABC
+ClassType2_K2=paste(str_sort(unique(df$Type)),collapse="-")
+
+# show the basic statistical information
+#ShowType(df,'ServTime') # patient type and information evaluated by prediction of service time.
+
+ShowType(df,'Duration')  # patient type and information evaluated by real service time.
+```
+### Sample from real data
+##Suppose##
++ we don’t need more than 16 patients in a session
++ we need 10000 replication for simulation
+```{r}
+ServList = Data2ServiceList(df) # to get the Service Time List
+CommonServTime2_K2 = ServL2ComServT(ServList,seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+```
+### Schedule Rules
+
+#### Scenario 21
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [6,10];
+
+```{r}
+# full sequencing
+loadData=T
+
+if (loadData==F) {
+
+Type1='A'
+Type2='B'
+n1 = 6
+n2 = 10
+ 
+Scenario21_result=FullSeq2Scenariolist(CommonServTime2_K2,Type1, Type2, n1, n2, X_Vec)
+Scenario21_list<-Scenario21_result$Scenariolist
+df21_FullSeq=Scenario21_result$FullSeq
+write.csv(df21_FullSeq,file="../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_6_10.csv",row.names = F)
+}else{
+df21_FullSeq = read.csv("../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_6_10.csv",stringsAsFactors = F)
+# working for loaded df_FullSeq file 
+Scenario21_list=list()
+name_list =sapply(df21_FullSeq[['Rule_name']],function(x) strsplit(x,''))
+Scenario21_list$Type <-name_list
+# X_Vec value
+Scenario21_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario21_list$Type))
+}
+```
+
+#### Scenario 22
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [7,9];
+
+```{r}
+# full sequencing
+loadData=T
+
+if (loadData==F) {
+
+Type1='A'
+Type2='B'
+n1 = 7
+n2 = 9
+#Scenario2=FullSeq_2Types_SimKPIH(CommonServTime,Type1, Type2, n1, n2, X_Vec)
+Scenario22_result=FullSeq2Scenariolist(CommonServTime2_K2,Type1, Type2, n1, n2, X_Vec)
+Scenario22_list<-Scenario22_result$Scenariolist
+df22_FullSeq=Scenario22_result$FullSeq
+write.csv(df22_FullSeq,file="../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_7_9.csv",row.names = F)
+}else{
+df22_FullSeq = read.csv("../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_7_9.csv",stringsAsFactors = F)
+# working for loaded df_FullSeq file 
+Scenario22_list=list()
+name_list =sapply(df22_FullSeq[['Rule_name']],function(x) strsplit(x,''))
+Scenario22_list$Type <-name_list
+# X_Vec value
+Scenario22_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario22_list$Type))
+}
+#p21=0.989749773892072
+#p22=0.0102502261079289
+```
+
+```{r}
+# The prob of choosing Scenario21,Scenario22 to meet all the patient type healthcare access.
+# calculate the ratio of A,B 
+Ratio2 <- RatioCalculation(df,6,10,7,9,n=16)
+p21 <- Ratio2$p1
+p22 <- Ratio2$p2
+```
+## KPI of Experiment rules
+### Calculate  Cost_mat of all the rules combination listed above
+
+### Result
+```{r}
+Ci_list=c(0.5,1,5,10,0) #unit time cost coefficient of idle time
+Co_list=c(1:10) #unit time cost coefficient of over time
+
+Result_list=c()
+Result_slot_list=c()
+Plot_list=c()
+#Co_list=c(3)
+n_Co=length(Co_list)
+
+result <- data.frame(Co=numeric(n_Co),#1
+                     New_Return_TSC=numeric(n_Co),#2 New_Return+Liter
+                     New_Return_CRG=numeric(n_Co),#3
+                     New_Return_Enum=numeric(n_Co),#4
+                     New_Return_gaps=numeric(n_Co),#5
+                     CPS_K2_TSC=numeric(n_Co),#6 CPS+Liter
+                     CPS_K2_CRG=numeric(n_Co),#7
+                     CPS_K2_Enum=numeric(n_Co),#8
+                     CPS_K3_temp=numeric(n_Co),#9 temp
+                     CPS_K3_CRG=numeric(n_Co),#10
+                     CPS_K3_Enum=numeric(n_Co),#11
+                     CPS_K2_gaps=numeric(n_Co),#12
+                     CPS_K3_gaps=numeric(n_Co),#13 
+                     CPSK2_CRG=numeric(n_Co),#14 %%%%%%%%%%%%%%%%%%%%%% Wsd
+                     CPSK3_CRG=numeric(n_Co),#15 Wsd
+                     NewReturn_TSC=numeric(n_Co),#16 Wsd
+                     FCFA=numeric(n_Co),#17 Wsd
+                     K2CRG_NR_Impro=numeric(n_Co),#18 %%%%%%%%%%%%%%%%%%%%%% Impro
+                     K3CRG_NR_Impro=numeric(n_Co),#19
+                     K2CRG_FCFA_Impro=numeric(n_Co),#20
+                     K3CRG_FCFA_Impro=numeric(n_Co),#21
+                     CPSK2_CRG_mw=numeric(n_Co),#22 %%%%%%%%%%%%%%%%%%%%%% mean wait
+                     CPSK3_CRG_mw=numeric(n_Co),#23 mean wait
+                     NewReturn_TSC_mw=numeric(n_Co),#24 mean wait
+                     FCFA_mw=numeric(n_Co),#25 mean wait
+                     CPSK2_CRG_ot=numeric(n_Co),#26 %%%%%%%%%%%%%%%%%%%%%% overtime
+                     CPSK3_CRG_ot=numeric(n_Co),#27 overtime
+                     NewReturn_TSC_ot=numeric(n_Co),#28 overtime
+                     FCFA_ot=numeric(n_Co),#29 overtime
+                     K2TSC_NRTSC_Impro=numeric(n_Co),#30 %%%%%%%%%%%%%%%%%%%%%% Impro
+                     K2CRG_K2TSC_Impro=numeric(n_Co),#31
+                     K3CRG_K2CRG_Impro=numeric(n_Co),#32 %(k2-k3)/k2
+                     K2CRG_Male_meanW=numeric(n_Co),#33  %%%%%%%%%%%%%%%%%%%%%% Gender K2
+                     K2CRG_Male_stdW=numeric(n_Co),#34
+                     K2CRG_Female_meanW=numeric(n_Co),#35
+                     K2CRG_Female_stdW=numeric(n_Co),#36
+                     K3CRG_Male_meanW=numeric(n_Co),#37  %%%%%%%%%%%%%%%%%%%%%% Gender k3
+                     K3CRG_Male_stdW=numeric(n_Co),#38
+                     K3CRG_Female_meanW=numeric(n_Co),#39
+                     K3CRG_Female_stdW=numeric(n_Co),#40
+                     K2SVF=numeric(n_Co),#41 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% SVF(Small Variance First)
+                     K3SVF=numeric(n_Co),#42
+                     K2Pair=numeric(n_Co),#43 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% Pair(pairwise)
+                     K3Pair=numeric(n_Co),#44
+                     K2_CRG_name=character(n_Co),#45 %%%%%%%%%%%%%%%%%%%%%% Rule name
+                     K3_CRG_name=character(n_Co),#46
+                     K2_Pair_name=character(n_Co),#47
+                     K3_Pair_name=character(n_Co),#48
+                     K2_Enum_name=character(n_Co),#49
+                     K3_Enum_name=character(n_Co),#50
+                     NewReturn_SVF=numeric(n_Co),#51
+                     NewReturn_Pair=numeric(n_Co),#52
+                     NR_Pair_Wsd=numeric(n_Co),#53 Wsd
+                     K2_Pair_Wsd=numeric(n_Co),#54 Wsd
+                     K3_Pair_Wsd=numeric(n_Co),#55 Wsd
+                     K2CRG_NR_Pair_Impro=numeric(n_Co),#56 %%%%%%%%%%%%%%%%%%%%%% Impro
+                     K3CRG_NR_Pair_Impro=numeric(n_Co),#57
+                     
+                     K2CRG_In_meanW=numeric(n_Co),#58  %%%%%%%%%%%%%%%%%%%%%% Address K2
+                     K2CRG_In_stdW=numeric(n_Co),#59
+                     K2CRG_Out_meanW=numeric(n_Co),#60
+                     K2CRG_Out_stdW=numeric(n_Co),#61
+                     K2CRG_NaN_meanW=numeric(n_Co),#62
+                     K2CRG_NaN_stdW=numeric(n_Co),#63
+                     K3CRG_In_meanW=numeric(n_Co),#64  %%%%%%%%%%%%%%%%%%%%%% Address K3
+                     K3CRG_In_stdW=numeric(n_Co),#65
+                     K3CRG_Out_meanW=numeric(n_Co),#66
+                     K3CRG_Out_stdW=numeric(n_Co),#67
+                     K3CRG_NaN_meanW=numeric(n_Co),#68
+                     K3CRG_NaN_stdW=numeric(n_Co),#69
+                     
+                     K2MoRule=numeric(n_Co),#70 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% MoRule(moment related rules)
+                     K3MoRule=numeric(n_Co),#71
+                     NewReturn_MoRule=numeric(n_Co),#72
+                     K2_MoRule_name=character(n_Co),#73
+                     K3_MoRule_name=character(n_Co),#74
+                     NR_MoRule_name=character(n_Co),#75
+                     K2_MoRule_Wsd=numeric(n_Co),#76 Wsd
+                     K3_MoRule_Wsd=numeric(n_Co),#77 Wsd
+                     NR_MoRule_Wsd=numeric(n_Co),#78 Wsd
+                     K2CRG_NR_MoRule_Impro=numeric(n_Co),#79 %%%%%%%%%%%%%%%%%%%%%% Impro
+                     K3CRG_NR_MoRule_Impro=numeric(n_Co),#80
+                     
+                     K2CRG_OutP_meanW=numeric(n_Co),#81 %%%%%%%%%%%%%%%%%%%%%%%%% Address-Out of province
+                     K2CRG_OutP_stdW=numeric(n_Co),#82
+                     K3CRG_OutP_meanW=numeric(n_Co),#83
+                     K3CRG_OutP_stdW=numeric(n_Co),#84
+                     
+                     K2MIP=numeric(n_Co),#85 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% MIP(Mix Integer Program)
+                     K3MIP=numeric(n_Co),#86
+                     K2_MIP_name=character(n_Co),#87
+                     K3_MIP_name=character(n_Co),#88
+                     K2MIP_time=numeric(n_Co),#89 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% MIP time
+                     K3MIP_time=numeric(n_Co),#90
+                     
+                     K2MIP11_time=numeric(n_Co),#91 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% MIP time
+                     K2MIP12_time=numeric(n_Co),#92
+                     K3MIP11_time=numeric(n_Co),#93
+                     K3MIP12_time=numeric(n_Co),#94
+                     K3MIP13_time=numeric(n_Co),#95
+                     
+                     stringsAsFactors = F)
+```
+
+```{r}
+result_slot <- list(
+  CPSK2_CRG_slw=vector("list", n_Co),#30 %%%%%%%%%%%%%%%%%%%%%% slot wait
+  CPSK3_CRG_slw=vector("list", n_Co),#31 slot wait
+  NewReturn_TSC_slw=vector("list", n_Co),#32 overtime
+  FCFA_slw=vector("list", n_Co),#33 overtime
+  CPSK2_CRG_sli=vector("list", n_Co),#34 %%%%%%%%%%%%%%%%%%%%%% slot idle
+  CPSK3_CRG_sli=vector("list", n_Co),#35 slot wait
+  NewReturn_TSC_sli=vector("list", n_Co),#36 overtime
+  FCFA_sli=vector("list", n_Co)#37 overtime
+)
+```
+
+
+```{r}
+jj=1 # index of result plot
+for (Ci in Ci_list){
+  ii=1 # index of result dataframe 
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){
+    Result_list1=Optcost_MixRule(ClassType1_K2,CommonServTime1_K2,schd_Benchmark,n,Ci,Co,sec,df11_FullSeq_K2,df12_FullSeq_K2,p11_K2,p12_K2,NewReturn_Flag=F,PRINT=T) #Enum K2
+    Result_list2=Optcost_MixRule(ClassType2_K2,CommonServTime2_K2,schd_Benchmark,n,Ci,Co,sec,df21_FullSeq,df22_FullSeq,p21,p22,NewReturn_Flag=T,PRINT=F) # New/Return
+    result[ii,c(1,4,8,49)] <- data.frame(Co,
+                      Result_list2$OptRule$Cost,# New/Return_Enum             
+                      Result_list1$OptRule$Cost,#CRG_K2_Enum
+                      Result_list1$OptRule$Name,#CRG_K2_Enum name
+                      stringsAsFactors = F)
+    
+    ii=ii+1
+}
+Result_list[[jj]]<-result
+Result_slot_list[[jj]]<-result_slot
+jj=jj+1
+}
+```
+
+## Non-Fullseq
+## mean rules
+### Non FullSeq CRG
+```{r}
+
+#### senario11
+# of[A,B,C] = [8,8,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount11 <- c(8,8,0)
+RuleList=SeqRule(TypeList, TypeCount11)
+LIST11_K2=String2chars(RuleList)
+
+
+Scenario11_list_K2=list()
+Scenario11_list_K2$Type <- LIST11_K2
+
+Scenario11_list_K2$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario11_list_K2$Type)) # X_Vec value 
+
+##########################
+start.time <- Sys.time()  
+CRG_df11_K2<-CRG_SimKPIH(CommonServTime1_K2,Scenario11_list_K2, X_Vec)
+end.time <- Sys.time()
+time.taken11 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken11)
+```
+
+```{r}
+#### senario12
+# of[A,B,C] = [9,7,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount12 <- c(9,7,0)
+RuleList=SeqRule(TypeList, TypeCount12)
+LIST12_K2=String2chars(RuleList)
+
+
+Scenario12_list_K2=list()
+Scenario12_list_K2$Type <- LIST12_K2
+
+Scenario12_list_K2$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario12_list_K2$Type)) # X_Vec value 
+##########################
+start.time <- Sys.time() 
+CRG_df12_K2<-CRG_SimKPIH(CommonServTime1_K2,Scenario12_list_K2, X_Vec)
+end.time <- Sys.time()
+time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken12)
+time.taken_K2_total=time.taken11+time.taken12
+cat("The runtime of CRG_Simu_k2 is:", time.taken_K2_total, "\n")
+
+K2CRG_timeList=list(time11=time.taken11, time12=time.taken12, total=time.taken_K2_total)
+
+# Converts elements in a list to character types
+K2CRG_timeList_as_character <- lapply(K2CRG_timeList, as.character)
+
+# Specifies the file path to be saved locally
+file_path <- "./RawOutput/Runtime/K2CRG_timeList.txt"
+
+# Writes the elements in the list to the file as text, setting the separator to a space
+write.table(K2CRG_timeList, file = file_path, col.names = TRUE, sep = " ")
+###############################################
+DFF <- list()
+# Adds three two-dimensional arrays to the list
+DFF[[1]] <- CommonServTime1_K2$A
+DFF[[2]] <- CommonServTime1_K2$B
+#DFF[[3]] <- CommonServTime1$C
+  
+n_samp=dim(DFF[[1]])[1]
+```
+
+## SVF & Pairwise K=2 Rule1
+```{r}
+
+#### senario11
+# of[A,B,C] = [8,8,0]
+TypeList <- c("B", "A", "C")
+TypeCount <- c(8,8,0)
+RuleList=rep(TypeList, TypeCount) 
+
+Scenario1_SVF_K2=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1)) #SFV
+
+
+# TypeList <- c("A", "B", "C") 
+# TypeCount <- c(8,8,0)
+# RuleList=rep(TypeList, TypeCount)
+Scenario1_Pair_K2=RuleList #Pairwise
+
+# MoRule
+# TypeList <- c("B", "A", "C")
+# TypeCount <- c(8,8,0)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario1_MoRule_K2=Moment_Rule(RuleList)
+
+```
+
+## SVF & Pairwise K=2 Rule2
+```{r}
+#### senario12
+# of[A,B,C] = [9,7,0]
+TypeList <- c("B", "A", "C") 
+TypeCount <- c(7,9,0)
+RuleList=rep(TypeList, TypeCount) 
+
+Scenario2_SVF_K2=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1)) #SFV
+
+# TypeList <- c("A", "B", "C") 
+# TypeCount <- c(9,7,0)
+# RuleList=rep(TypeList, TypeCount)
+Scenario2_Pair_K2=RuleList #Pairwise
+
+
+# MoRule
+# TypeList <- c("B", "A", "C")
+# TypeCount <- c(7,9,0)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario2_MoRule_K2=Moment_Rule(RuleList)
+```
+
+
+### Non FullSeq Liter
+```{r}
+#### senario11
+# of[A,B,C] = [8,8,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(8,8,0)
+RuleList=SeqRule_Liter(TypeList, TypeCount)
+LIST11_K2_L=String2chars(RuleList)
+
+
+
+Scenario11_list_K2L=list()
+Scenario11_list_K2L$Type <- LIST11_K2_L
+
+Scenario11_list_K2L$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario11_list_K2L$Type)) # X_Vec value 
+
+#### senario12
+# of[A,B,C] = [9,7,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(9,7,0)
+RuleList=SeqRule_Liter(TypeList, TypeCount)
+LIST12_K2_L=String2chars(RuleList)
+
+
+Scenario12_list_K2L=list()
+Scenario12_list_K2L$Type <- LIST12_K2_L
+
+Scenario12_list_K2L$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario12_list_K2L$Type)) # X_Vec value 
+```
+
+
+### Non FullSeq New/Return CRG
+```{r}
+#### senario21
+# of[A,B,C] = [6,10,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(6,10,0)
+RuleList=SeqRule(TypeList, TypeCount)
+LIST21=String2chars(RuleList)
+
+
+Scenario21_list=list()
+Scenario21_list$Type <- LIST21
+
+Scenario21_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario21_list$Type)) # X_Vec value 
+```
+
+```{r}
+#### senario22
+# of[A,B,C] = [7,9,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(7,9,0)
+RuleList=SeqRule(TypeList, TypeCount)
+LIST22=String2chars(RuleList)
+
+
+Scenario22_list=list()
+Scenario22_list$Type <- LIST22
+
+Scenario22_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario22_list$Type)) # X_Vec value 
+```
+
+## SVF & Pairwise NR Rule1
+```{r}
+
+#### senario11
+# of[A,B,C] = [6,10,0]
+TypeList <- c("B", "A", "C")
+TypeCount <- c(10,6,0)
+RuleList=rep(TypeList, TypeCount) 
+
+Scenario1_SVF_NR=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1)) #SFV
+
+
+# TypeList <- c("A", "B", "C") 
+# TypeCount <- c(6,10,0)
+# RuleList=rep(TypeList, TypeCount)
+Scenario1_Pair_NR=RuleList #Pairwise
+
+# MoRule
+# TypeList <- c("B", "A", "C")
+# TypeCount <- c(10,6,0)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario1_MoRule_NR=Moment_Rule(RuleList)
+```
+
+## SVF & Pairwise NR Rule2
+```{r}
+#### senario12
+# of[A,B,C] = [7,9,0]
+TypeList <- c("B", "A", "C") 
+TypeCount <- c(9,7,0)
+RuleList=rep(TypeList, TypeCount) 
+
+Scenario2_SVF_NR=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1)) #SFV
+
+# TypeList <- c("A", "B", "C") 
+# TypeCount <- c(7,9,0)
+# RuleList=rep(TypeList, TypeCount)
+Scenario2_Pair_NR=RuleList #Pairwise
+
+# MoRule
+# TypeList <- c("B", "A", "C")
+# TypeCount <- c(9,7,0)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario2_MoRule_NR=Moment_Rule(RuleList)
+```
+
+### Non FullSeq New/Return TSC
+```{r}
+#### senario21
+# of[A,B,C] = [6,10,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(6,10,0)
+RuleList=SeqRule_Liter(TypeList, TypeCount)
+LIST21_L=String2chars(RuleList)
+
+
+Scenario21_list_L=list()
+Scenario21_list_L$Type <- LIST21_L
+
+Scenario21_list_L$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario21_list_L$Type)) # X_Vec value 
+
+#### senario22
+# of[A,B,C] = [7,9,0]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount <- c(7,9,0)
+RuleList=SeqRule_Liter(TypeList, TypeCount)
+LIST22_L=String2chars(RuleList)
+
+Scenario22_list_L=list()
+Scenario22_list_L$Type <- LIST22_L
+
+Scenario22_list_L$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario22_list_L$Type)) # X_Vec value
+```
+
+```{r}
+if (Load_Result_List==TRUE){Result_list <- read.csv("./RawOutput/ResultData/Result_list_0320.csv")}
+```
+
+
+```{r}
+jj=1 
+for (Ci in Ci_list){
+  ii=1
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){ # unit time cost coefficient of over time
+    
+   
+    #Benchmark:
+    cost_Benchmark = n*KPI_Benchmark$wait_mean+Ci*KPI_Benchmark$Idle_mean+Co*KPI_Benchmark$OT_mean #mean cost per day
+    
+    
+    #CRG K2
+    Record11=Lookup_OptRecord_NonFullSeq(df11_FullSeq_K2,Scenario11_list_K2,Ci,Co,n)
+    Record12=Lookup_OptRecord_NonFullSeq(df12_FullSeq_K2,Scenario12_list_K2,Ci,Co,n)
+    
+    #k2 SVF
+    SVF11=Lookup_OptRecord_SVF(df11_FullSeq_K2,Scenario1_SVF_K2,Ci,Co,n)
+    SVF12=Lookup_OptRecord_SVF(df12_FullSeq_K2,Scenario2_SVF_K2,Ci,Co,n)
+    
+    #k2 Pairwise interchanges
+    Pair11=Pairwise_interchange_Pro(df11_FullSeq_K2,Scenario1_Pair_K2,Ci,Co,n)
+    Pair12=Pairwise_interchange_Pro(df12_FullSeq_K2,Scenario2_Pair_K2,Ci,Co,n)
+    
+    
+    #CRG MoRule
+    MoRule11=Lookup_OptRecord_NonFullSeq(df11_FullSeq_K2,Scenario1_MoRule_K2,Ci,Co,n)
+    MoRule12=Lookup_OptRecord_NonFullSeq(df12_FullSeq_K2,Scenario2_MoRule_K2,Ci,Co,n)
+    
+    #New_Return+CRG
+    Record21=Lookup_OptRecord_NonFullSeq(df21_FullSeq,Scenario21_list,Ci,Co,n)
+    Record22=Lookup_OptRecord_NonFullSeq(df22_FullSeq,Scenario22_list,Ci,Co,n)
+    
+    #New_Return+SVF
+    SVF11_NR=Lookup_OptRecord_SVF(df21_FullSeq,Scenario1_SVF_NR,Ci,Co,n)
+    SVF12_NR=Lookup_OptRecord_SVF(df22_FullSeq,Scenario2_SVF_NR,Ci,Co,n)
+    
+    #New_Return+Pair
+    Pair11_NR=Pairwise_interchange_Pro(df21_FullSeq,Scenario1_Pair_NR,Ci,Co,n)
+    Pair12_NR=Pairwise_interchange_Pro(df22_FullSeq,Scenario2_Pair_NR,Ci,Co,n)
+    
+    #New_Return+MoRule
+    MoRule11_NR=Lookup_OptRecord_NonFullSeq(df21_FullSeq,Scenario1_MoRule_NR,Ci,Co,n)
+    MoRule12_NR=Lookup_OptRecord_NonFullSeq(df22_FullSeq,Scenario2_MoRule_NR,Ci,Co,n)
+
+    ## Peformance Index test
+    #CPS
+    Optimal_rule_Name = paste(Record11$Rule, Record12$Rule, sep = " & ")
+    Optimal_rule_Cost = (p11_K2*Record11$Cost+p12_K2*Record12$Cost)/cost_Benchmark
+    #Optimal_rule_Wsd = (p11_K2*Record11$Wsd+p12_K2*Record12$Wsd)
+    Optimal_rule_Wsd=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,Record11,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,Record12,X_Vec))
+    Optimal_rule_Wmean = (p11_K2*Record11$Wmean+p12_K2*Record12$Wmean)
+    Optimal_rule_OT = (p11_K2*Record11$Omean+p12_K2*Record12$Omean)
+    
+    # k2 SVF cost
+    SVF_Name = paste(SVF11$Rule, SVF12$Rule, sep = " & ")
+    SVF_Cost = (p11_K2*SVF11$Cost+p12_K2*SVF12$Cost)/cost_Benchmark
+    #SVF_Wsd = (p11_K2*SVF11$Wsd+p12_K2*SVF12$Wsd)
+    SVF_Wsd=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,SVF11,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,SVF12,X_Vec))
+    SVF_Wmean = (p11_K2*SVF11$Wmean+p12_K2*SVF12$Wmean)
+    SVF_OT = (p11_K2*SVF11$Omean+p12_K2*SVF12$Omean)
+    
+    # K2 Pair cost
+    Pair_Name = paste(Pair11$Rule, Pair12$Rule, sep = " & ")
+    Pair_Cost = (p11_K2*Pair11$Cost+p12_K2*Pair12$Cost)/cost_Benchmark
+    #Pair_Wsd = (p11_K2*Pair11$Wsd+p12_K2*Pair12$Wsd)
+    Pair_Wsd=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,Pair11,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,Pair12,X_Vec))
+    Pair_Wmean = (p11_K2*Pair11$Wmean+p12_K2*Pair12$Wmean)
+    Pair_OT = (p11_K2*Pair11$Omean+p12_K2*Pair12$Omean)
+    
+    
+    # K2 MoRule cost
+    MoRule_Name = paste(MoRule11$Rule, MoRule12$Rule, sep = " & ")
+    MoRule_Cost = (p11_K2*MoRule11$Cost+p12_K2*MoRule12$Cost)/cost_Benchmark
+    #MoRule_Wsd = (p11_K2*MoRule11$Wsd+p12_K2*MoRule12$Wsd)
+    MoRule_Wsd=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,MoRule11,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,MoRule12,X_Vec))
+    MoRule_Wmean = (p11_K2*MoRule11$Wmean+p12_K2*MoRule12$Wmean)
+    MoRule_OT = (p11_K2*MoRule11$Omean+p12_K2*MoRule12$Omean)
+    
+  
+    # New/Return SVF cost
+    SVF_Name_NR = paste(SVF11_NR$Rule, SVF12_NR$Rule, sep = " & ")
+    SVF_Cost_NR = (p11_K2*SVF11_NR$Cost+p12_K2*SVF12_NR$Cost)/cost_Benchmark
+    #SVF_Wsd_NR = (p11_K2*SVF11_NR$Wsd+p12_K2*SVF12_NR$Wsd)
+    SVF_Wsd_NR=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,SVF11_NR,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,SVF12_NR,X_Vec))
+    SVF_Wmean_NR = (p11_K2*SVF11_NR$Wmean+p12_K2*SVF12_NR$Wmean)
+    SVF_OT_NR = (p11_K2*SVF11_NR$Omean+p12_K2*SVF12_NR$Omean)
+    
+    # New/Return Pair cost
+    Pair_Name_NR = paste(Pair11_NR$Rule, Pair12_NR$Rule, sep = " & ")
+    Pair_Cost_NR = (p11_K2*Pair11_NR$Cost+p12_K2*Pair12_NR$Cost)/cost_Benchmark
+    #Pair_Wsd_NR = (p11_K2*Pair11_NR$Wsd+p12_K2*Pair12_NR$Wsd)
+    Pair_Wsd_NR=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,Pair11_NR,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,Pair12_NR,X_Vec))
+    Pair_Wmean_NR = (p11_K2*Pair11_NR$Wmean+p12_K2*Pair12_NR$Wmean)
+    Pair_OT_NR = (p11_K2*Pair11_NR$Omean+p12_K2*Pair12_NR$Omean)
+    
+    # New/Return MoRule cost
+    MoRule_Name_NR = paste(MoRule11_NR$Rule, MoRule12_NR$Rule, sep = " & ")
+    MoRule_Cost_NR = (p11_K2*MoRule11_NR$Cost+p12_K2*MoRule12_NR$Cost)/cost_Benchmark
+    #MoRule_Wsd_NR = (p11_K2*MoRule11_NR$Wsd+p12_K2*MoRule12_NR$Wsd)
+    MoRule_Wsd_NR=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,MoRule11_NR,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,MoRule12_NR,X_Vec))
+    MoRule_Wmean_NR = (p11_K2*MoRule11_NR$Wmean+p12_K2*MoRule12_NR$Wmean)
+    MoRule_OT_NR = (p11_K2*MoRule11_NR$Omean+p12_K2*MoRule12_NR$Omean)
+    
+    ##CPS+CRG Gender
+    schd1<-RuleName2schd(Record11$Rule)
+    schd2<-RuleName2schd(Record12$Rule)
+    Gender_Adress_KPI1=Schd2Gender_Address_KPI(CommonServTime1_K2,CommonGender1_K2,CommonAddress1_K2,schd1)
+    Gender_Adress_KPI2=Schd2Gender_Address_KPI(CommonServTime1_K2,CommonGender1_K2,CommonAddress1_K2,schd2)
+    
+    K2CRG_M_meanW=p11_K2*Gender_Adress_KPI1$Male$Gmean_all+p12_K2*Gender_Adress_KPI2$Male$Gmean_all
+    #K2CRG_M_stdW=sd(p11_K2*Gender_Adress_KPI1$Male$Gmean_Slot+p12_K2*Gender_Adress_KPI2$Male$Gmean_Slot)
+    K2CRG_M_stdW=weighted_K2_sd(Gender_Adress_KPI1$Male$Gsample, Gender_Adress_KPI2$Male$Gsample, p11_K2, p12_K2)
+    #K2CRG_M_stdW=p11_K2*Gender_Adress_KPI1$Male$Gstd_all+p12_K2*Gender_Adress_KPI2$Male$Gstd_all
+    
+    K2CRG_F_meanW=p11_K2*Gender_Adress_KPI1$Female$Gmean_all+p12_K2*Gender_Adress_KPI2$Female$Gmean_all
+    #K2CRG_F_stdW=sd(p11_K2*Gender_Adress_KPI1$Female$Gmean_Slot+p12_K2*Gender_Adress_KPI2$Female$Gmean_Slot)
+    K2CRG_F_stdW=weighted_K2_sd(Gender_Adress_KPI1$Female$Gsample, Gender_Adress_KPI2$Female$Gsample, p11_K2, p12_K2)
+    #K2CRG_F_stdW=p11_K2*Gender_Adress_KPI1$Female$Gstd_all+p12_K2*Gender_Adress_KPI2$Female$Gstd_all
+    
+    # Address
+    K2CRG_In_meanW=p11_K2*Gender_Adress_KPI1$In$Amean_all+p12_K2*Gender_Adress_KPI2$In$Amean_all
+    #K2CRG_In_stdW=sd(p11_K2*Gender_Adress_KPI1$In$Amean_Slot+p12_K2*Gender_Adress_KPI2$In$Amean_Slot)
+    K2CRG_In_stdW=weighted_K2_sd(Gender_Adress_KPI1$In$Asample, Gender_Adress_KPI2$In$Asample, p11_K2, p12_K2)
+    #K2CRG_In_stdW=p11_K2*Gender_Adress_KPI1$In$Astd_all+p12_K2*Gender_Adress_KPI2$In$Astd_all
+    
+    
+    K2CRG_Out_meanW=p11_K2*Gender_Adress_KPI1$Out$Amean_all+p12_K2*Gender_Adress_KPI2$Out$Amean_all
+    #K2CRG_Out_stdW=sd(p11_K2*Gender_Adress_KPI1$Out$Amean_Slot+p12_K2*Gender_Adress_KPI2$Out$Amean_Slot)
+    K2CRG_Out_stdW=weighted_K2_sd(Gender_Adress_KPI1$Out$Asample, Gender_Adress_KPI2$Out$Asample, p11_K2, p12_K2)
+    #K2CRG_Out_stdW=p11_K2*Gender_Adress_KPI1$Out$Astd_all+p12_K2*Gender_Adress_KPI2$Out$Astd_all
+    
+    
+    K2CRG_NaN_meanW=p11_K2*Gender_Adress_KPI1$isNaN$Amean_all+p12_K2*Gender_Adress_KPI2$isNaN$Amean_all
+    #K2CRG_NaN_stdW=sd(p11_K2*Gender_Adress_KPI1$isNaN$Amean_Slot+p12_K2*Gender_Adress_KPI2$isNaN$Amean_Slot)
+    K2CRG_NaN_stdW=weighted_K2_sd(Gender_Adress_KPI1$isNaN$Asample, Gender_Adress_KPI2$isNaN$Asample, p11_K2, p12_K2)
+    #K2CRG_NaN_stdW=p11_K2*Gender_Adress_KPI1$isNaN$Astd_all+p12_K2*Gender_Adress_KPI2$isNaN$Astd_all
+    
+    K2CRG_OutP_meanW=p11_K2*Gender_Adress_KPI1$OutP$Amean_all+p12_K2*Gender_Adress_KPI2$OutP$Amean_all
+    #K2CRG_OutP_stdW=sd(p11_K2*Gender_Adress_KPI1$OutP$Amean_Slot+p12_K2*Gender_Adress_KPI2$OutP$Amean_Slot)
+    K2CRG_OutP_stdW=weighted_K2_sd(Gender_Adress_KPI1$OutP$Asample, Gender_Adress_KPI2$OutP$Asample, p11_K2, p12_K2)
+    #K2CRG_OutP_stdW=p11_K2*Gender_Adress_KPI1$OutP$Astd_all+p12_K2*Gender_Adress_KPI2$OutP$Astd_all
+    
+    # Slot_Time
+    KPI11 = Slot_TimeKPI(Record11,CommonServTime1_K2,X_Vec,rKPI)
+    KPI12 = Slot_TimeKPI(Record12,CommonServTime1_K2,X_Vec,rKPI)
+    
+
+    Optimal_rule_slw = (p11_K2*KPI11$Wait+p12_K2*KPI12$Wait)
+    Optimal_rule_sli = (p11_K2*KPI11$Idle+p12_K2*KPI12$Idle) 
+
+    #New_Return
+    Optimal_NewReturn_Name = paste(Record21$Rule, Record22$Rule, sep = " & ")
+    Optimal_NewReturn_Cost = (p21*Record21$Cost+p22*Record22$Cost)/cost_Benchmark
+    
+
+
+    txt_note =sprintf('Classification type: %s. When Ci=%.1f,Co=%.1f,the Optimal CRG combination rule is: %s, its cost is %.3f',ClassType1_K2,Ci,Co,Optimal_rule_Name,Optimal_rule_Cost) #output document
+    
+    #txt_note =sprintf('Classification type: %s. When Ci=%.1f,Co=%.1f,the Optimal New/Return+CRG rule is: %s, its cost is %.3f',ClassType2_K2,Ci,Co,Optimal_NewReturn_Name,Optimal_NewReturn_Cost) #output document
+
+    print(txt_note)
+    
+    Result_list[[jj]][ii,c(3,7,12,14,22,26,33,34,35,36,41,43,45,47,51,52,53,54,58,59,60,61,62,63,70,73,72,78,76,81,82)]<- data.frame(#Co,
+                      Optimal_NewReturn_Cost, #New_Return_CRG
+                      Optimal_rule_Cost,#K2_CRG
+                      round(100*(Optimal_rule_Cost-Result_list[[jj]][ii,c(8)]),2),
+                      Optimal_rule_Wsd/KPI_Benchmark$wait_sd,
+                      Optimal_rule_Wmean,
+                      Optimal_rule_OT,
+                      K2CRG_M_meanW,
+                      K2CRG_M_stdW,
+                      K2CRG_F_meanW,
+                      K2CRG_F_stdW,
+                      SVF_Cost,
+                      Pair_Cost,
+                      Optimal_rule_Name, #k2_CRG
+                      Pair_Name, #K2_Pair
+                      SVF_Cost_NR, #NR+SVF
+                      Pair_Cost_NR, #NR+SVF
+                      Pair_Wsd_NR/KPI_Benchmark$wait_sd, #NR+Pair wsd
+                      Pair_Wsd/KPI_Benchmark$wait_sd, #k2+Pair wsd
+                      K2CRG_In_meanW, ##################k2 Address
+                      K2CRG_In_stdW,
+                      K2CRG_Out_meanW,
+                      K2CRG_Out_stdW,
+                      K2CRG_NaN_meanW,
+                      K2CRG_NaN_stdW,
+                      
+                      MoRule_Cost, #K2_MoRule
+                      MoRule_Name, #K2_MoRule
+                      MoRule_Cost_NR, #NR+MoRule
+                      MoRule_Wsd_NR/KPI_Benchmark$wait_sd, #NR+MoRule wsd
+                      MoRule_Wsd/KPI_Benchmark$wait_sd, #k2+MoRule wsd
+                      
+                      K2CRG_OutP_meanW, ###################k2 Address OutP
+                      K2CRG_OutP_stdW,
+                      
+                      stringsAsFactors = F)
+    
+    Result_slot_list[[jj]]$CPSK2_CRG_slw[[ii]]=Optimal_rule_slw
+    Result_slot_list[[jj]]$CPSK2_CRG_sli[[ii]]=Optimal_rule_sli
+    
+    ii=ii+1
+  }
+jj=jj+1
+}
+
+```
+
+
+```{r}
+jj=1 
+for (Ci in Ci_list){
+  ii=1
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){ # unit time cost coefficient of over time
+    
+   
+    #Benchmark:
+    cost_Benchmark = n*KPI_Benchmark$wait_mean+Ci*KPI_Benchmark$Idle_mean+Co*KPI_Benchmark$OT_mean #mean cost per day
+ 
+    
+    if (Ci == 50 && Co == 50){
+      nk1=TypeCount11
+      nk2=TypeCount12
+      K=2L
+      
+      start.time <- Sys.time()
+      MIP_result11 <- py_module$Patient_scheduling_MIP(n_samp, K, nk1, DFF, Ci, Co, c_W=1, n=16L, T=240)
+      end.time <- Sys.time()
+      time.taken11 <- as.numeric(end.time - start.time, units = "secs")
+      
+      start.time <- Sys.time()
+      MIP_result12 <- py_module$Patient_scheduling_MIP(n_samp, K, nk2, DFF, Ci, Co, c_W=1, n=16L, T=240)
+      end.time <- Sys.time()
+      time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+      time.taken=time.taken11+time.taken12
+      print(time.taken)
+      
+      Scenario1_MIP_K2=list(Type=MIP_result11[[2]], X_Vec = rep(15*(60/sec), n-1))
+      Scenario2_MIP_K2=list(Type=MIP_result12[[2]], X_Vec = rep(15*(60/sec), n-1))
+      MIP11=Lookup_OptRecord_SVF(df11_FullSeq_K2,Scenario1_MIP_K2,Ci,Co,n)
+      MIP12=Lookup_OptRecord_SVF(df12_FullSeq_K2,Scenario2_MIP_K2,Ci,Co,n)
+      
+      # K2 MIP cost
+      MIP_Name = paste(MIP11$Rule, MIP12$Rule, sep = " & ")
+      MIP_Cost = (p11_K2*MIP11$Cost+p12_K2*MIP12$Cost)/cost_Benchmark
+      #MIP_Wsd = (p11_K2*MIP11$Wsd+p12_K2*MIP12$Wsd)
+      MIP_Wsd=sd(p11_K2*Get_wait_vec(CommonServTime1_K2,MIP11,X_Vec)+p12_K2*Get_wait_vec(CommonServTime1_K2,MIP12,X_Vec))
+      MIP_Wmean = (p11_K2*MIP11$Wmean+p12_K2*MIP12$Wmean)
+      MIP_OT = (p11_K2*MIP11$Omean+p12_K2*MIP12$Omean)
+      
+      Result_list[[jj]][ii,c(85,87,89,91,92)]<- data.frame(
+                                                        MIP_Cost, #######################K2 MIP
+                                                        MIP_Name,
+                                                        time.taken,
+                                                        time.taken11,
+                                                        time.taken12,
+                                                          
+                                                        stringsAsFactors = F)
+      
+    }
+    
+    ii=ii+1
+  }
+jj=jj+1
+}
+
+```
+
+```{r}
+jj=1 
+for (Ci in Ci_list){
+  ii=1
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){ # unit time cost coefficient of over time
+    
+   
+    #Benchmark:
+    cost_Benchmark = n*KPI_Benchmark$wait_mean+Ci*KPI_Benchmark$Idle_mean+Co*KPI_Benchmark$OT_mean #mean cost per day
+    
+    
+    #CPS+Liter
+    Record11=Lookup_OptRecord_NonFullSeq(df11_FullSeq_K2,Scenario11_list_K2L,Ci,Co,n)
+    Record12=Lookup_OptRecord_NonFullSeq(df12_FullSeq_K2,Scenario12_list_K2L,Ci,Co,n)
+
+    #New_Return+Liter
+    Record21=Lookup_OptRecord_NonFullSeq(df21_FullSeq,Scenario21_list_L,Ci,Co,n)
+    Record22=Lookup_OptRecord_NonFullSeq(df22_FullSeq,Scenario22_list_L,Ci,Co,n)
+
+    ## Peformance Index test
+    #CPS
+    Optimal_rule_Name = paste(Record11$Rule, Record12$Rule, sep = " & ")
+    Optimal_rule_Cost = (p11_K2*Record11$Cost+p12_K2*Record12$Cost)/cost_Benchmark
+
+    #New_Return
+    Optimal_NewReturn_Name = paste(Record21$Rule, Record22$Rule, sep = " & ")
+    Optimal_NewReturn_Cost = (p21*Record21$Cost+p22*Record22$Cost)/cost_Benchmark
+    #Optimal_NewReturn_Wsd = (p21*Record21$Wsd+p22*Record22$Wsd)
+    Optimal_NewReturn_Wsd=sd(p21*Get_wait_vec(CommonServTime2_K2,Record21,X_Vec)+p22*Get_wait_vec(CommonServTime2_K2,Record22,X_Vec))
+    Optimal_NewReturn_Wmean = (p21*Record21$Wmean+p22*Record22$Wmean)
+    Optimal_NewReturn_Omean = (p21*Record21$Omean+p22*Record22$Omean)
+    
+    #  # Slot_Time
+    KPI21 = Slot_TimeKPI(Record21,CommonServTime2_K2,X_Vec,rKPI)
+    KPI22 = Slot_TimeKPI(Record22,CommonServTime2_K2,X_Vec,rKPI)
+    Optimal_NewReturn_slw = (p21*KPI21$Wait+p22*KPI22$Wait)
+    Optimal_NewReturn_sli = (p21*KPI21$Idle+p22*KPI22$Idle)
+    
+    
+    
+
+    #txt_note =sprintf('Classification type: %s. When Ci=%.1f,Co=%.1f,the Optimal literature combination rule is: %s, its cost is %.3f',ClassType1_K2,Ci,Co,Optimal_rule_Name,Optimal_rule_Cost) #output document
+    
+    txt_note =sprintf('Classification type: %s. When Ci=%.1f,Co=%.1f,the Optimal N/R+liter combination rule is: %s, its cost is %.3f',ClassType2_K2,Ci,Co,Optimal_NewReturn_Name,Optimal_NewReturn_Cost) #output document
+
+    print(txt_note)
+    
+    Result_list[[jj]][ii,c(2,5,6,16,24,28)]<- data.frame(#Co,
+                      Optimal_NewReturn_Cost, #New_Return_Li
+                      round(100*(Optimal_NewReturn_Cost-Result_list[[jj]][ii,c(4)])/Result_list[[jj]][ii,c(4)],2),
+                      Optimal_rule_Cost, #CPS_K2_Li
+                      Optimal_NewReturn_Wsd/KPI_Benchmark$wait_sd,
+                      Optimal_NewReturn_Wmean,
+                      Optimal_NewReturn_Omean,
+                      
+                      stringsAsFactors = F)
+    
+    Result_slot_list[[jj]]$NewReturn_TSC_slw[[ii]]=Optimal_NewReturn_slw
+    Result_slot_list[[jj]]$NewReturn_TSC_sli[[ii]]=Optimal_NewReturn_sli
+
+    ii=ii+1
+  }
+jj=jj+1
+}
+
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost_pro(Result_list[[jj]][c(1,2,6,7,8)],Ci)
+jj=jj+1
+}
+
+```
+
+```{r}
+# WithIdle_ALL
+## Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 4a.pdf",width=12,height=4) #Figure 4a
+```
+
+```{r}
+
+# Notice : set the classification type here
+df$Type = df$CPS_K3 # choose the class type # Cluster ABC
+ClassType1=paste(str_sort(unique(df$Type)),collapse="-")
+
+# show the basic statistical information
+
+#ShowType(df,'ServTime') # patient type and information evaluated by prediction of service time.
+
+ShowType(df,'Duration')  # patient type and information evaluated by real service time.
+```
+### Sample from real data
+##Suppose##
++ we don’t need more than 16 patients in a session
++ we need 10000 replication for simulation
+
+```{r}
+ServList = Data2ServiceList(df) # to get the Service Time List
+#CommonServTime1_K2 = ServL2ComServT(ServList,seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+GenderList = Data2GenderList(df) # to get the Service Time List
+AddressList = Data2AddressList(df)
+CommonList = SGAList2ComSGList(ServList, GenderList, AddressList, seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+CommonServTime1=CommonList$ServTime
+CommonGender1=CommonList$Gender
+CommonAddress1=CommonList$Address
+```
+
+
+```{r}
+# Benchmark KPI
+schd<-schd_Benchmark
+Gender_Adress_KPI=Schd2Gender_Address_KPI(CommonServTime1,CommonGender1,CommonAddress1,schd)
+# Time related KPI computing
+rKPI=Gender_Adress_KPI$rKPI
+KPI_Benchmark = rKPI2KPIH(schd,rKPI=rKPI,plan_completion = 4*60L*(60/sec),PRINT = T) 
+```
+
+## Simulation data set
+* According to the raw data from HANGU based on real distribution and some assumption,we do the following work.
+
+### Schedule Rules
+
+#### Scenario 11
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B,C] = [1,13,2];
+
+#### Scenario 12
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B,C] = [1,14,1];
+
+#### Scenario 13
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B,C] = [2,13,1];
+
+## Experiment rules
+### CPS
+
+```{r}
+
+# IBFI (individualblock/fixed-interval) rule
+
+### Scenario11 # of[A,B,C] = [1,13,2]
+# full sequencing
+loadData=T
+
+if (loadData==F) {
+Type1='A'
+Type2='B'
+Type3='C'
+n1 = 0
+n2 = 13
+n3 = 3
+
+start.time <- Sys.time()
+Scenario11_result=FullSeq2Scenariolist(CommonServTime1, Type2, Type3, n2, n3, X_Vec)
+Scenario11_list<-Scenario11_result$Scenariolist
+df11_FullSeq=Scenario11_result$FullSeq
+end.time <- Sys.time()
+time.taken21 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken21)
+
+write.csv(df11_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_13_3.csv",row.names = F)
+
+}else{
+df11_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_13_3.csv",stringsAsFactors = F)
+# working for loaded df file 
+Scenario11_list=list()
+name_list =sapply(df11_FullSeq[['Rule_name']],function(x) strsplit(x,''))
+Scenario11_list$Type <-name_list
+# X_Vec value
+Scenario11_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario11_list$Type))
+}
+```
+
+
+```{r}
+### Scenario12
+# of[A,B,C] = [1,14,1]  
+# the cv value order is B<C<A
+
+# full sequencing
+if (loadData==F) {
+Type1='A'
+Type2='B'
+Type3='C'
+n1 = 0
+n2 = 14
+n3 = 2
+start.time <- Sys.time() 
+Scenario12_result=FullSeq2Scenariolist(CommonServTime1, Type2, Type3, n2, n3, X_Vec)
+Scenario12_list<-Scenario12_result$Scenariolist
+df12_FullSeq=Scenario12_result$FullSeq
+end.time <- Sys.time()
+time.taken22 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken22)
+
+write.csv(df12_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_14_2.csv",row.names = F)
+}else{
+df12_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_14_2.csv",stringsAsFactors = F)
+# working for loaded df file 
+Scenario12_list=list()
+name_list =sapply(df12_FullSeq[['Rule_name']],function(x) strsplit(x,''))
+Scenario12_list$Type <-name_list
+# X_Vec value
+Scenario12_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario12_list$Type))
+}
+```
+
+
+```{r}
+### Scenario13
+# of[A,B,C] = [2,13,1]
+# full sequencing
+if (loadData==F) {
+Type1='A'
+Type2='B'
+Type3='C'
+n1 = 1
+n2 = 13
+n3 = 2
+start.time <- Sys.time()  
+#Scenario13=FullSeq_3Types_SimKPIH(CommonServTime,Type1, Type2, Type3, n1, n2, n3, X_Vec)
+Scenario13_result=FullSeq3Scenariolist(CommonServTime1,Type1, Type2, Type3, n1, n2, n3, X_Vec)
+Scenario13_list<-Scenario13_result$Scenariolist
+df13_FullSeq=Scenario13_result$FullSeq
+end.time <- Sys.time()
+time.taken23 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken23)
+############################################
+time.taken_K3_total=time.taken21+time.taken22+time.taken23
+cat("The runtime of Full_Simu_k3 is:", time.taken_K3_total, "\n")
+
+K3Full_timeList=list(time21=time.taken21, time22=time.taken22, time23=time.taken23, total=time.taken_K3_total)
+
+K3Full_timeList_as_character <- lapply(K3Full_timeList, as.character)
+
+file_path <- "./RawOutput/Runtime/K3Full_timeList.txt"
+
+write.table(K3Full_timeList, file = file_path, col.names = TRUE, sep = " ")
+##################################################
+
+write.csv(df13_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_1_13_2.csv",row.names = F)
+}else{
+df13_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_1_13_2.csv",stringsAsFactors = F)
+# working for loaded df file 
+Scenario13_list=list()
+name_list =sapply(df13_FullSeq[['Rule_name']],function(x) strsplit(x,''))
+Scenario13_list$Type <-name_list
+# X_Vec value
+Scenario13_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario13_list$Type))
+}
+
+```
+
+```{r}
+Ratio1 <- Ratio_Three_Calculation(df, 0, 13, 3, 0, 14, 2, 1, 13, 2, n)
+p11 <- Ratio1$p1
+p12 <- Ratio1$p2
+p13 <- Ratio1$p3
+```
+
+### class:New_Return
+##### The statistical information of patients type
+```{r}
+# Notice : set the classification type here
+df$Type = df$New_Return # choose the class type # Cluster ABC
+ClassType2=paste(str_sort(unique(df$Type)),collapse="-")
+
+# show the basic statistical information
+#ShowType(df,'ServTime') # patient type and information evaluated by prediction of service time.
+
+ShowType(df,'Duration')  # patient type and information evaluated by real service time.
+```
+### Sample from real data
+##Suppose##
++ we don’t need more than 16 patients in a session
++ we need 10000 replication for simulation
+```{r}
+ServList = Data2ServiceList(df) # to get the Service Time List
+CommonServTime2 = ServL2ComServT(ServList,seed=123, n_samp=10000, max_n=16) #call the ServL2ComServT function to get the all the sample data set
+#CommonServTime2(When k=3) is the same as CommonServTime2_K2
+```
+### Schedule Rules
+
+#### Scenario 21
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [6,10];
+
+#### Scenario 22
+* According to the distribution of the raw data, one of the Scenario may be # of[A,B] = [7,9];
+
+## KPI of Experiment rules
+### Calculate  Cost_mat of all the rules combination listed above
+
+### Result
+```{r}
+Plot_list=c()
+#Co_list=c(3)
+n_Co=length(Co_list)
+```
+
+
+```{r}
+jj=1 # index of result plot
+for (Ci in Ci_list){
+ii=1 # index of result dataframe 
+print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+for (Co in Co_list){
+    Result_list1_K3=Optcost_TripleRule(ClassType1,CommonServTime1,schd_Benchmark,n,Ci,Co,sec,df11_FullSeq,df12_FullSeq,df13_FullSeq,p11,p12,p13,PRINT=T) #CPS_K3
+    Result_list2=Optcost_MixRule(ClassType2,CommonServTime2,schd_Benchmark,n,Ci,Co,sec,df21_FullSeq,df22_FullSeq,p21,p22,NewReturn_Flag=T,PRINT = F) # New/Return
+    Result_list[[jj]][ii,c(1,4,11,50)] <- data.frame(Co,
+                      Result_list2$OptRule$Cost,#New_Return_Enum
+                      Result_list1_K3$OptRule$Cost,#CPS_K3_Enum
+                      Result_list1_K3$OptRule$Name,#CPS_K3_Enum name
+                      stringsAsFactors = F)
+    ii=ii+1
+}
+jj=jj+1
+}
+```
+
+## Non-Fullseq
+## mean rules
+### Non FullSeq CPS
+```{r}
+
+#### senario11
+# of[A,B,C] = [0,13,3]  
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount11 <- c(0,13,3)
+RuleList=SeqRule(TypeList, TypeCount11)
+LIST11=String2chars(RuleList)
+
+Scenario11_list=list()
+Scenario11_list$Type <- LIST11
+
+Scenario11_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario11_list$Type)) # X_Vec value 
+
+#########################
+start.time <- Sys.time()  
+CRG_df11_K3<-CRG_SimKPIH(CommonServTime1,Scenario11_list, X_Vec)
+end.time <- Sys.time()
+time.taken11 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken11)
+```
+
+```{r}
+#### senario12
+# of[A,B,C] = [0,14,2]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount12 <- c(0,14,2)
+RuleList=SeqRule(TypeList, TypeCount12)
+LIST12=String2chars(RuleList)
+
+Scenario12_list=list()
+Scenario12_list$Type <- LIST12
+
+Scenario12_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario12_list$Type)) # X_Vec value 
+#########################
+start.time <- Sys.time()  
+CRG_df12_K3<-CRG_SimKPIH(CommonServTime1,Scenario12_list, X_Vec)
+end.time <- Sys.time()
+time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken12)
+```
+
+```{r}
+#### senario13
+# of[A,B,C] = [1,13,2]
+TypeList <- LETTERS[1:3] # c("A", "B", "C")
+TypeCount13 <- c(1,13,2)
+RuleList=SeqRule(TypeList, TypeCount13)
+LIST13=String2chars(RuleList)
+
+
+Scenario13_list=list()
+Scenario13_list$Type <- LIST13
+
+Scenario13_list$X_Vec=rep(list(rep(15*(60/sec), n-1)),length(Scenario13_list$Type)) # X_Vec value 
+
+#########################
+start.time <- Sys.time()  
+CRG_df13_K3<-CRG_SimKPIH(CommonServTime1,Scenario13_list, X_Vec)
+end.time <- Sys.time()
+time.taken13 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken13)
+time.taken_K3_total=time.taken11+time.taken12+time.taken13
+cat("The runtime of CRG_Simu_k3 is:", time.taken_K3_total, "\n")
+K3CRG_timeList=list(time11=time.taken11, time12=time.taken12, time13=time.taken13, total=time.taken_K3_total)
+
+
+K3CRG_timeList_as_character <- lapply(K3CRG_timeList, as.character)
+
+
+file_path <- "./RawOutput/Runtime/K3CRG_timeList.txt"
+
+
+write.table(K3CRG_timeList, file = file_path, col.names = TRUE, sep = " ")
+###########################
+
+DFF <- list()
+
+DFF[[1]] <- CommonServTime1$A
+DFF[[2]] <- CommonServTime1$B
+DFF[[3]] <- CommonServTime1$C
+  
+n_samp=dim(DFF[[1]])[1]
+```
+
+
+## SVF K=3 Rule1
+```{r}
+
+#### senario11
+# of[A,B,C] = [0,13,3]
+TypeList <- c("B","C","A")
+TypeCount <- c(13,3,0)
+RuleList=rep(TypeList, TypeCount) 
+Scenario1_SVF_K3=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1))
+
+
+# TypeList <- c("A","B","C")
+# TypeCount <- c(0,13,3)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario1_Pair_K3=RuleList #Pairwise
+
+# MoRule
+TypeList <- c("C", "B", "A")
+TypeCount <- c(3,13,0)
+RuleList=rep(TypeList, TypeCount) 
+Scenario1_MoRule_K3=Moment_Rule(RuleList)
+```
+
+## SVF K=3 Rule2
+```{r}
+#### senario12
+# of[A,B,C] = [0,14,2]  
+TypeList <- c("B","C","A")
+TypeCount <- c(14,2,0)
+RuleList=rep(TypeList, TypeCount) 
+Scenario2_SVF_K3=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1))
+
+
+# TypeList <- c("A","B","C")
+# TypeCount <- c(0,14,2)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario2_Pair_K3=RuleList #Pairwise
+
+
+# MoRule
+TypeList <- c("C", "B", "A")
+TypeCount <- c(2,14,0)
+RuleList=rep(TypeList, TypeCount) 
+Scenario2_MoRule_K3=Moment_Rule(RuleList)
+```
+
+## SVF K=3 Rule3
+```{r}
+#### senario13
+# of[A,B,C] = [1,13,2]  
+TypeList <- c("B","C","A") 
+TypeCount <- c(13,2,1)
+RuleList=rep(TypeList, TypeCount) 
+Scenario3_SVF_K3=list(Type=RuleList, X_Vec = rep(15*(60/sec), n-1))
+
+
+# TypeList <- c("A","B","C")
+# TypeCount <- c(1,13,2)
+# RuleList=rep(TypeList, TypeCount) 
+Scenario3_Pair_K3=RuleList #Pairwise
+
+
+# MoRule
+TypeList1 <- c("C", "B", "A")
+TypeCount1 <- c(2,13,1)
+RuleList1=rep(TypeList1, TypeCount1) 
+TypeList2 <- c("B", "C", "A")
+TypeCount2 <- c(13,2,1)
+RuleList2=rep(TypeList2, TypeCount2) 
+Scenario3_MoRule_K3=Moment_Rule(RuleList1,RuleList2)
+```
+
+
+### Non FullSeq New/Return
+```{r}
+#### senario21
+# of[A,B,C] = [6,10,0]  
+#n1=6;n2=10;n3=0;Type1='A';Type2='B';Type3='C'
+
+#### senario22
+# of[A,B,C] = [7,9,0]  
+#n1=7;n2=9;n3=0;Type1='A';Type2='B';Type3='C'
+```
+
+
+```{r}
+jj=1 
+for (Ci in Ci_list){
+  ii=1
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){ # unit time cost coefficient of over time
+    
+   
+    #Benchmark:
+    cost_Benchmark = n*KPI_Benchmark$wait_mean+Ci*KPI_Benchmark$Idle_mean+Co*KPI_Benchmark$OT_mean #mean cost per day
+    
+    
+    #CPS
+    Record11=Lookup_OptRecord_NonFullSeq(df11_FullSeq,Scenario11_list,Ci,Co,n)
+    Record12=Lookup_OptRecord_NonFullSeq(df12_FullSeq,Scenario12_list,Ci,Co,n)
+    Record13=Lookup_OptRecord_NonFullSeq(df13_FullSeq,Scenario13_list,Ci,Co,n)
+    
+    #SVF
+    SVF11=Lookup_OptRecord_SVF(df11_FullSeq,Scenario1_SVF_K3,Ci,Co,n)
+    SVF12=Lookup_OptRecord_SVF(df12_FullSeq,Scenario2_SVF_K3,Ci,Co,n)
+    SVF13=Lookup_OptRecord_SVF(df13_FullSeq,Scenario3_SVF_K3,Ci,Co,n)
+    
+    # Pairwise interchanges K3
+    Pair11=Pairwise_interchange_Pro(df11_FullSeq,Scenario1_Pair_K3,Ci,Co,n)
+    Pair12=Pairwise_interchange_Pro(df12_FullSeq,Scenario2_Pair_K3,Ci,Co,n)
+    Pair13=Pairwise_interchange_Pro(df13_FullSeq,Scenario3_Pair_K3,Ci,Co,n)
+    
+    # MoRule K3
+    MoRule11=Lookup_OptRecord_NonFullSeq(df11_FullSeq,Scenario1_MoRule_K3,Ci,Co,n)
+    MoRule12=Lookup_OptRecord_NonFullSeq(df12_FullSeq,Scenario2_MoRule_K3,Ci,Co,n)
+    MoRule13=Lookup_OptRecord_NonFullSeq(df13_FullSeq,Scenario3_MoRule_K3,Ci,Co,n)
+    
+    
+    #New_Return
+    Record21=Lookup_OptRecord_NonFullSeq(df21_FullSeq,Scenario21_list,Ci,Co,n)
+    Record22=Lookup_OptRecord_NonFullSeq(df22_FullSeq,Scenario22_list,Ci,Co,n)
+
+    ## Peformance Index test
+    #CPS
+    Optimal_rule_Name = paste(Record11$Rule, Record12$Rule, Record13$Rule, sep = " & ")
+    Optimal_rule_Cost = (p11*Record11$Cost+p12*Record12$Cost+p13*Record13$Cost)/cost_Benchmark
+    #Optimal_rule_Wsd = (p11*Record11$Wsd+p12*Record12$Wsd+p13*Record13$Wsd)
+    Optimal_rule_Wsd=sd(p11*Get_wait_vec(CommonServTime1,Record11,X_Vec)+p12*Get_wait_vec(CommonServTime1,Record12,X_Vec)+p13*Get_wait_vec(CommonServTime1,Record13,X_Vec))
+    Optimal_rule_Wmean = (p11*Record11$Wmean+p12*Record12$Wmean+p13*Record13$Wmean)
+    Optimal_rule_Omean = (p11*Record11$Omean+p12*Record12$Omean+p13*Record13$Omean)
+    
+    #SVF
+    SVF_Name = paste(SVF11$Rule, SVF12$Rule, SVF13$Rule, sep = " & ")
+    SVF_Cost = (p11*SVF11$Cost+p12*SVF12$Cost+p13*SVF13$Cost)/cost_Benchmark
+    #SVF_Wsd = (p11*SVF11$Wsd+p12*SVF12$Wsd+p13*SVF13$Wsd)
+    SVF_Wsd=sd(p11*Get_wait_vec(CommonServTime1,SVF11,X_Vec)+p12*Get_wait_vec(CommonServTime1,SVF12,X_Vec)+p13*Get_wait_vec(CommonServTime1,SVF13,X_Vec))
+    SVF_Wmean = (p11*SVF11$Wmean+p12*SVF12$Wmean+p13*SVF13$Wmean)
+    SVF_OT = (p11*SVF11$Omean+p12*SVF12$Omean+p13*SVF13$Omean)
+    
+    #Pair
+    Pair_Name = paste(Pair11$Rule, Pair12$Rule, Pair13$Rule, sep = " & ")
+    Pair_Cost = (p11*Pair11$Cost+p12*Pair12$Cost+p13*Pair13$Cost)/cost_Benchmark
+    #Pair_Wsd = (p11*Pair11$Wsd+p12*Pair12$Wsd+p13*Pair13$Wsd)
+    Pair_Wsd=sd(p11*Get_wait_vec(CommonServTime1,Pair11,X_Vec)+p12*Get_wait_vec(CommonServTime1,Pair12,X_Vec)+p13*Get_wait_vec(CommonServTime1,Pair13,X_Vec))
+    Pair_Wmean = (p11*Pair11$Wmean+p12*Pair12$Wmean+p13*Pair13$Wmean)
+    Pair_OT = (p11*Pair11$Omean+p12*Pair12$Omean+p13*Pair13$Omean)
+    
+    #MoRule
+    MoRule_Name = paste(MoRule11$Rule, MoRule12$Rule, MoRule13$Rule, sep = " & ")
+    MoRule_Cost = (p11*MoRule11$Cost+p12*MoRule12$Cost+p13*MoRule13$Cost)/cost_Benchmark
+    #MoRule_Wsd = (p11*MoRule11$Wsd+p12*MoRule12$Wsd+p13*MoRule13$Wsd)
+    MoRule_Wsd=sd(p11*Get_wait_vec(CommonServTime1,MoRule11,X_Vec)+p12*Get_wait_vec(CommonServTime1,MoRule12,X_Vec)+p13*Get_wait_vec(CommonServTime1,MoRule13,X_Vec))
+    MoRule_Wmean = (p11*MoRule11$Wmean+p12*MoRule12$Wmean+p13*MoRule13$Wmean)
+    MoRule_OT = (p11*MoRule11$Omean+p12*MoRule12$Omean+p13*MoRule13$Omean)
+    
+    ##CPS+CRG Gender
+    schd1<-RuleName2schd(Record11$Rule)
+    schd2<-RuleName2schd(Record12$Rule)
+    schd3<-RuleName2schd(Record13$Rule)
+    
+    Gender_Adress_KPI1=Schd2Gender_Address_KPI(CommonServTime1,CommonGender1,CommonAddress1,schd1)
+    Gender_Adress_KPI2=Schd2Gender_Address_KPI(CommonServTime1,CommonGender1,CommonAddress1,schd2)
+    Gender_Adress_KPI3=Schd2Gender_Address_KPI(CommonServTime1,CommonGender1,CommonAddress1,schd3)
+    
+    K3CRG_M_meanW=p11*Gender_Adress_KPI1$Male$Gmean_all+p12*Gender_Adress_KPI2$Male$Gmean_all+p13*Gender_Adress_KPI3$Male$Gmean_all
+    #K3CRG_M_stdW=sd(p11*Gender_Adress_KPI1$Male$Gmean_Slot+p12*Gender_Adress_KPI2$Male$Gmean_Slot+p13*Gender_Adress_KPI3$Male$Gmean_Slot)
+    K3CRG_M_stdW=weighted_K3_sd(Gender_Adress_KPI1$Male$Gsample, Gender_Adress_KPI2$Male$Gsample, Gender_Adress_KPI3$Male$Gsample, p11, p12, p13)
+    #K3CRG_M_stdW=p11*Gender_Adress_KPI1$Male$Gstd_all+p12*Gender_Adress_KPI2$Male$Gstd_all+p13*Gender_Adress_KPI3$Male$Gstd_all
+    
+    K3CRG_F_meanW=p11*Gender_Adress_KPI1$Female$Gmean_all+p12*Gender_Adress_KPI2$Female$Gmean_all+p13*Gender_Adress_KPI3$Female$Gmean_all
+    #K3CRG_F_stdW=sd(p11*Gender_Adress_KPI1$Female$Gmean_Slot+p12*Gender_Adress_KPI2$Female$Gmean_Slot+p13*Gender_Adress_KPI3$Female$Gmean_Slot)
+    K3CRG_F_stdW=weighted_K3_sd(Gender_Adress_KPI1$Female$Gsample, Gender_Adress_KPI2$Female$Gsample, Gender_Adress_KPI3$Female$Gsample, p11, p12, p13)
+    #K3CRG_F_stdW=p11*Gender_Adress_KPI1$Female$Gstd_all+p12*Gender_Adress_KPI2$Female$Gstd_all+p13*Gender_Adress_KPI3$Female$Gstd_all
+    
+    # Address
+    K3CRG_In_meanW=p11*Gender_Adress_KPI1$In$Amean_all+p12*Gender_Adress_KPI2$In$Amean_all+p13*Gender_Adress_KPI3$In$Amean_all
+    #K3CRG_In_stdW=sd(p11*Gender_Adress_KPI1$In$Amean_Slot+p12*Gender_Adress_KPI2$In$Amean_Slot+p13*Gender_Adress_KPI3$In$Amean_Slot)
+    K3CRG_In_stdW=weighted_K3_sd(Gender_Adress_KPI1$In$Asample, Gender_Adress_KPI2$In$Asample, Gender_Adress_KPI3$In$Asample, p11, p12, p13)
+    #K3CRG_In_stdW=p11*Gender_Adress_KPI1$In$Astd_all+p12*Gender_Adress_KPI2$In$Astd_all+p13*Gender_Adress_KPI3$In$Astd_all
+    
+    
+    K3CRG_Out_meanW=p11*Gender_Adress_KPI1$Out$Amean_all+p12*Gender_Adress_KPI2$Out$Amean_all+p13*Gender_Adress_KPI3$Out$Amean_all
+    #K3CRG_Out_stdW=sd(p11*Gender_Adress_KPI1$Out$Amean_Slot+p12*Gender_Adress_KPI2$Out$Amean_Slot+p13*Gender_Adress_KPI3$Out$Amean_Slot)
+    K3CRG_Out_stdW=weighted_K3_sd(Gender_Adress_KPI1$Out$Asample, Gender_Adress_KPI2$Out$Asample, Gender_Adress_KPI3$Out$Asample, p11, p12, p13)
+    #K3CRG_Out_stdW=p11*Gender_Adress_KPI1$Out$Astd_all+p12*Gender_Adress_KPI2$Out$Astd_all+p13*Gender_Adress_KPI3$Out$Astd_all
+    
+    K3CRG_NaN_meanW=p11*Gender_Adress_KPI1$isNaN$Amean_all+p12*Gender_Adress_KPI2$isNaN$Amean_all+p13*Gender_Adress_KPI3$isNaN$Amean_all
+    #K3CRG_NaN_stdW=sd(p11*Gender_Adress_KPI1$isNaN$Amean_Slot+p12*Gender_Adress_KPI2$isNaN$Amean_Slot+p13*Gender_Adress_KPI3$isNaN$Amean_Slot)
+    K3CRG_NaN_stdW=weighted_K3_sd(Gender_Adress_KPI1$isNaN$Asample, Gender_Adress_KPI2$isNaN$Asample, Gender_Adress_KPI3$isNaN$Asample, p11, p12, p13)
+    #K3CRG_NaN_stdW=p11*Gender_Adress_KPI1$isNaN$Astd_all+p12*Gender_Adress_KPI2$isNaN$Astd_all+p13*Gender_Adress_KPI3$isNaN$Astd_all
+    
+    K3CRG_OutP_meanW=p11*Gender_Adress_KPI1$OutP$Amean_all+p12*Gender_Adress_KPI2$OutP$Amean_all+p13*Gender_Adress_KPI3$OutP$Amean_all
+    #K3CRG_OutP_stdW=sd(p11*Gender_Adress_KPI1$OutP$Amean_Slot+p12*Gender_Adress_KPI2$OutP$Amean_Slot+p13*Gender_Adress_KPI3$OutP$Amean_Slot)
+    K3CRG_OutP_stdW=weighted_K3_sd(Gender_Adress_KPI1$OutP$Asample, Gender_Adress_KPI2$OutP$Asample, Gender_Adress_KPI3$OutP$Asample, p11, p12, p13)
+    #K3CRG_OutP_stdW=p11*Gender_Adress_KPI1$OutP$Astd_all+p12*Gender_Adress_KPI2$OutP$Astd_all+p13*Gender_Adress_KPI3$OutP$Astd_all
+    
+    #  # Slot_Time
+    KPI11 = Slot_TimeKPI(Record11,CommonServTime1,X_Vec,rKPI)
+    KPI12 = Slot_TimeKPI(Record12,CommonServTime1,X_Vec,rKPI)
+    KPI13 = Slot_TimeKPI(Record13,CommonServTime1,X_Vec,rKPI)
+    
+    
+    Optimal_rule_slw = (p11*KPI11$Wait+p12*KPI12$Wait+p13*KPI13$Wait)  
+    Optimal_rule_sli = (p11*KPI11$Idle+p12*KPI12$Idle+p13*KPI13$Idle)
+     
+    Optimal_rule_slw_ben = (p11*KPI11$W_Bench+p12*KPI12$W_Bench+p13*KPI13$W_Bench)  
+    Optimal_rule_sli_ben = (p11*KPI11$I_Bench+p12*KPI12$I_Bench+p13*KPI13$I_Bench)
+    
+
+    #New_Return
+    Optimal_NewReturn_Name = paste(Record21$Rule, Record22$Rule, sep = " & ")
+    Optimal_NewReturn_Cost = (p21*Record21$Cost+p22*Record22$Cost)/cost_Benchmark
+
+
+    txt_note =sprintf('Classification type: %s. When Ci=%.1f,Co=%.1f,the Optimal CRG combination rule is: %s, its cost is %.3f',ClassType1,Ci,Co,Optimal_rule_Name,Optimal_rule_Cost) #output document
+
+    print(txt_note)
+    Result_list[[jj]][ii,c(3,10,13,15,17,23,25,27,29,37,38,39,40,42,44,46,48,55,64,65,66,67,68,69,71,74,77,83,84)]<- data.frame(#Co,
+                      Optimal_NewReturn_Cost, #New_Return_CRG
+                      Optimal_rule_Cost, #CPS_K3_CRG
+                      round(100*(Optimal_rule_Cost-Result_list[[jj]][ii,c(11)]),2),
+                      Optimal_rule_Wsd/KPI_Benchmark$wait_sd,
+                      1,#KPI_Benchmark$wait_sd
+                      Optimal_rule_Wmean,
+                      KPI_Benchmark$wait_mean,
+                      Optimal_rule_Omean,
+                      KPI_Benchmark$OT_mean,
+                      K3CRG_M_meanW,
+                      K3CRG_M_stdW,
+                      K3CRG_F_meanW,
+                      K3CRG_F_stdW,
+                      SVF_Cost,
+                      Pair_Cost,
+                      Optimal_rule_Name, #K3_CRG
+                      Pair_Name, #K3_Pair
+                      Pair_Wsd/KPI_Benchmark$wait_sd, #k3+Pair wsd
+                      K3CRG_In_meanW, ######################## K3 Address
+                      K3CRG_In_stdW,
+                      K3CRG_Out_meanW,
+                      K3CRG_Out_stdW,
+                      K3CRG_NaN_meanW,
+                      K3CRG_NaN_stdW,
+                      
+                      MoRule_Cost,
+                      MoRule_Name, #K3_Pair
+                      MoRule_Wsd/KPI_Benchmark$wait_sd, #k3+Pair wsd
+                      
+                      K3CRG_OutP_meanW,######### K3 Address OutP
+                      K3CRG_OutP_stdW,
+            
+                    
+                      stringsAsFactors = F)
+    
+    Result_slot_list[[jj]]$CPSK3_CRG_slw[[ii]]=Optimal_rule_slw
+    Result_slot_list[[jj]]$FCFA_slw[[ii]]=Optimal_rule_slw_ben
+    Result_slot_list[[jj]]$CPSK3_CRG_sli[[ii]]=Optimal_rule_sli
+    Result_slot_list[[jj]]$FCFA_sli[[ii]]=Optimal_rule_sli_ben
+    
+    Result_list[[jj]][ii,c(18,19,20,21,30,31,32,56,57,79,80)]<- data.frame(
+                      (Result_list[[jj]]$New_Return_TSC[ii]-Result_list[[jj]]$CPS_K2_CRG[ii])/Result_list[[jj]]$New_Return_TSC[ii]*100, #K2+CRG VS. New/Return+TSC
+                      (Result_list[[jj]]$New_Return_TSC[ii]-Result_list[[jj]]$CPS_K3_CRG[ii])/Result_list[[jj]]$New_Return_TSC[ii]*100, #K3+CRG VS. New/Return+TSC
+                      (1-Result_list[[jj]]$CPS_K2_CRG[ii])*100, #K2+CRG VS. FCFA
+                      (1-Result_list[[jj]]$CPS_K3_CRG[ii])*100, #K3+CRG VS. FCFA
+                      (Result_list[[jj]]$New_Return_TSC[ii]-Result_list[[jj]]$CPS_K2_TSC[ii])/Result_list[[jj]]$New_Return_TSC[ii]*100, #K2_TSC vs. N/R_TSC
+                      (Result_list[[jj]]$CPS_K2_TSC[ii]-Result_list[[jj]]$CPS_K2_CRG[ii])/Result_list[[jj]]$CPS_K2_TSC[ii]*100, #K2+CRG vs. K2+TSC
+                      (Result_list[[jj]]$CPS_K2_CRG[ii]-Result_list[[jj]]$CPS_K3_CRG[ii])/Result_list[[jj]]$CPS_K2_CRG[ii]*100, #K3+CRG vs. K2+CRG
+                      (Result_list[[jj]]$NewReturn_Pair[ii]-Result_list[[jj]]$CPS_K2_CRG[ii])/Result_list[[jj]]$NewReturn_Pair[ii]*100, #K2+CRG vs. New/Return+Pair
+                      (Result_list[[jj]]$NewReturn_Pair[ii]-Result_list[[jj]]$CPS_K3_CRG[ii])/Result_list[[jj]]$NewReturn_Pair[ii]*100, #K3+CRG vs. New/Return+Pair
+                      (Result_list[[jj]]$NewReturn_MoRule[ii]-Result_list[[jj]]$CPS_K2_CRG[ii])/Result_list[[jj]]$NewReturn_MoRule[ii]*100, #K2+CRG vs. New/Return+MoRule
+                      (Result_list[[jj]]$NewReturn_MoRule[ii]-Result_list[[jj]]$CPS_K3_CRG[ii])/Result_list[[jj]]$NewReturn_MoRule[ii]*100, #K3+CRG vs. New/Return+MoRule
+                      
+                      stringsAsFactors = F)
+
+    ii=ii+1
+  }
+  jj=jj+1
+}
+
+```
+
+
+```{r}
+jj=1 
+for (Ci in Ci_list){
+  ii=1
+  print(sprintf("Ci=%.1f-------Cutting line----------",Ci))
+  for (Co in Co_list){ # unit time cost coefficient of over time
+    
+   
+    #Benchmark:
+    cost_Benchmark = n*KPI_Benchmark$wait_mean+Ci*KPI_Benchmark$Idle_mean+Co*KPI_Benchmark$OT_mean #mean cost per day
+    
+    # k3 MIP Ci list=c(0.5,1,5,10,0),jj=c(1,2,3,4,5),we now focus on Ci=c(5,10,0)
+    # Readers can adjust the values of cI and cO according to their needs to activate the Gurobi solver algorithm; however, 
+    # it should be noted that the required time is usually quite long.
+    if ((Ci == 100 || Ci == 100) && Co == 5){
+      nk1=TypeCount11
+      nk2=TypeCount12
+      nk3=TypeCount13
+      K=3L
+      
+      start.time <- Sys.time()
+      MIP_result11 <- py_module$Patient_scheduling_MIP(n_samp, K, nk1, DFF, Ci, Co, c_W=1, n=16L, T=240)
+      end.time <- Sys.time()
+      time.taken11 <- as.numeric(end.time - start.time, units = "secs")
+      
+      start.time <- Sys.time()
+      MIP_result12 <- py_module$Patient_scheduling_MIP(n_samp, K, nk2, DFF, Ci, Co, c_W=1, n=16L, T=240)
+      end.time <- Sys.time()
+      time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+      
+      start.time <- Sys.time()
+      MIP_result13 <- py_module$Patient_scheduling_MIP(n_samp, K, nk3, DFF, Ci, Co, c_W=1, n=16L, T=240)
+      end.time <- Sys.time()
+      time.taken13 <- as.numeric(end.time - start.time, units = "secs")
+      
+      time.taken = time.taken11+time.taken12+time.taken13
+      print(time.taken)
+      
+      Scenario1_MIP_K3=list(Type=MIP_result11[[2]], X_Vec = rep(15*(60/sec), n-1))
+      Scenario2_MIP_K3=list(Type=MIP_result12[[2]], X_Vec = rep(15*(60/sec), n-1))
+      Scenario3_MIP_K3=list(Type=MIP_result13[[2]], X_Vec = rep(15*(60/sec), n-1))
+      
+      MIP11=Lookup_OptRecord_SVF(df11_FullSeq,Scenario1_MIP_K3,Ci,Co,n)
+      MIP12=Lookup_OptRecord_SVF(df12_FullSeq,Scenario2_MIP_K3,Ci,Co,n)
+      MIP13=Lookup_OptRecord_SVF(df13_FullSeq,Scenario3_MIP_K3,Ci,Co,n)
+      
+      # K3 MIP cost
+      MIP_Name = paste(MIP11$Rule, MIP12$Rule, MIP13$Rule, sep = " & ")
+      MIP_Cost = (p11*MIP11$Cost+p12*MIP12$Cost+p13*MIP13$Cost)/cost_Benchmark
+      MIP_Wsd=sd(p11*Get_wait_vec(CommonServTime1,MIP11,X_Vec)+p12*Get_wait_vec(CommonServTime1,MIP12,X_Vec)+p13*Get_wait_vec(CommonServTime1,MIP13,X_Vec))
+      MIP_Wmean = (p11*MIP11$Wmean+p12*MIP12$Wmean+p13*MIP13$Wmean)
+      MIP_OT = (p11*MIP11$Omean+p12*MIP12$Omean+p13*MIP13$Omean)
+      
+      Result_list[[jj]][ii,c(86,88,90,93,94,95)]<- data.frame(
+                                                              MIP_Cost,
+                                                              MIP_Name,
+                                                              time.taken,
+                                                              time.taken11,
+                                                              time.taken12,
+                                                              time.taken13,
+                                                              
+                                                              stringsAsFactors = F)}
+      
+    ii=ii+1
+  }
+  jj=jj+1
+}
+```
+
+
+```{r}
+write.csv(Result_list,file="./RawOutput/ResultData/Result_list.csv",row.names = F)
+# Load CSV file
+#Result_list <- read.csv("./RawOutput/ResultData/Result_list.csv")
+```
+
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost_overlap(Result_list[[jj]][c(1,2,10,11)],Ci) #c(1,2,10,11)
+jj=jj+1
+}
+
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 4b.pdf",width=12,height=4) #Figure 4b
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost(Result_list[[jj]][,c(1,7,10)],Ci)
+jj=jj+1
+}
+
+```
+
+
+# WithIdle_ALL
+```{r}
+## Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 4c.pdf",width=12,height=4) #Figure 4c
+```
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost_MoRule(Result_list[[jj]][,c(1,70,7,71,10)],Ci)
+jj=jj+1
+}
+
+```
+
+
+# Without Idle_ALL
+```{r}
+## Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 5a.pdf",width=12,height=4) #Figure 5a
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost_MoRule_NR(Result_list[[jj]][,c(1,72,3)],Ci)
+jj=jj+1
+}
+
+```
+
+
+# Without Idle_ALL
+```{r}
+## Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 5b.pdf",width=12,height=4) #Figure 5b
+```
+
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Optcost_MoRule_NR(Result_list[[jj]][,c(1,72,7,10)],Ci)
+jj=jj+1
+}
+
+```
+
+# Without Idle_ALL
+```{r}
+## Used
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Figure 5c.pdf",width=12,height=4) #Figure 5c
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Wait_sd_Slot(Result_list[[jj]][c(1,16,14,15,17)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure 6a.pdf",width=12,height=4) #Figure 6a
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Co_Wait_sd_Mo_Slot(Result_list[[jj]][c(1,76,78,14,17,77,15)],Ci) #K2_Pair_Wsd, K3_Pair_Wsd, NR_Pair_Wsd, CPSK2_CRG, FCFA, CPSK3_CRG
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure 6b.pdf",width=12,height=4) #Figure 6b
+```
+
+# plot gender wait mean
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Gender_Wait_mean_Slot_ALL(Result_list[[jj]][c(1,33,35)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F1a.pdf",width=12,height=4) #Figure F1a
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Gender_Wait_std_Slot_ALL(Result_list[[jj]][c(1,34,36)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F1b.pdf",width=12,height=4) #Figure F1b
+```
+
+
+# plot gender wait std
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Gender_Wait_mean_Slot_ALL(Result_list[[jj]][c(1,37,39)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F2a.pdf",width=12,height=4) #Figure F2a
+```
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Gender_Wait_std_Slot_ALL(Result_list[[jj]][c(1,38,40)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F2b.pdf",width=12,height=4) #Figure F2b
+```
+
+# plot address wait mean
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_AddressK2K3_Wait_mean_Slot_ALL(Result_list[[jj]][c(1,58,60,81,62)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F3a.pdf",width=12,height=4) #Figure F3a
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_AddressK2K3_Wait_std_Slot_ALL(Result_list[[jj]][c(1,59,61,82,63)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F3b.pdf",width=12,height=4) #Figure F3b
+```
+
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_AddressK2K3_Wait_mean_Slot_ALL(Result_list[[jj]][c(1,64,66,83,68)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F4a.pdf",width=12,height=4) #Figure F4a
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_AddressK2K3_Wait_std_Slot_ALL(Result_list[[jj]][c(1,65,67,84,69)],Ci)
+jj=jj+1
+}
+```
+
+
+```{r}
+# WithIdle_ALL
+### Used 
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+
+p
+ggsave(p,filename="./RawOutput/figures/Figure F4b.pdf",width=12,height=4) #Figure F4b
+```
+
+```{r}
+start.time <- Sys.time() 
+SVF110=Lookup_OptRecord_SVF(df11_FullSeq_K2,Scenario1_SVF_K2,Ci,Co,n)
+SVF120=Lookup_OptRecord_SVF(df12_FullSeq_K2,Scenario2_SVF_K2,Ci,Co,n)
+end.time <- Sys.time()
+time.taken12 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken12)
+```
+
+```{r}
+start.time <- Sys.time() 
+SVF110=Lookup_OptRecord_SVF(df13_FullSeq,Scenario3_SVF_K3,Ci,Co,n)
+end.time <- Sys.time()
+time.taken13 <- as.numeric(end.time - start.time, units = "secs")
+print(time.taken12)
+```
+
+## Optimal Gaps
+
+```{r}
+# Optimal Gaps
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Gaps_Optcost(Result_list[[jj]][,c(1,12,13)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+
+```
+
+
+```{r}
+# Gaps
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Cost4_caps_opt_0712_m2_55.pdf",width=12,height=4)
+```
+```{r}
+GapK2=c()
+GapK3=c()
+MeanGap=c(0,0)
+for (jj in c(5,3,4)){
+    GapK2<-c(GapK2,mean(Result_list[[jj]]$CPS_K2_gaps))
+    GapK3<-c(GapK3,mean(Result_list[[jj]]$CPS_K3_gaps))
+    
+  }
+MeanGap[1]=sum(GapK2)/3
+MeanGap[2]=sum(GapK3)/3
+MeanGap
+```
+
+
+## Improvement rate
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_Optcost_NR(Result_list[[jj]][,c(1,79,80)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_CPS_NR_Mo_0712_m2_55.pdf",width=12,height=4)
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_Optcost_NR(Result_list[[jj]][,c(1,19,18)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_CPS_NR_0712_m2_55.pdf",width=12,height=4)
+```
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_Optcost_FCFA(Result_list[[jj]][,c(1,21,20)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_CPS_FCFA_0712_m2_55.pdf",width=12,height=4)
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_Optcost_K2_NR(Result_list[[jj]][,c(1,30)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_K2_NR_0712_m2_55.pdf",width=12,height=4) #K2+TSC VS. N/R+TSC
+```
+
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_Optcost_CRG_TSC(Result_list[[jj]][,c(1,31)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_CRG_TSC_0712_m2_55.pdf",width=12,height=4) #K2+CRG VS. K2+TSC
+```
+
+```{r}
+jj=1
+for (Ci in Ci_list){
+Plot_list[[jj]]<-Plot_Impro_K2CRG_k3CRG(Result_list[[jj]][,c(1,32)],Ci) #c(1,5,12,13)
+jj=jj+1
+}
+```
+
+
+```{r}
+# Improve
+p<-plot_grid(Plot_list[[5]] , Plot_list[[3]]+labs(y = ""), Plot_list[[4]] + labs(y = ""), ncol = 3, align = "h", axis = "tb")
+p
+ggsave(p,filename="./RawOutput/figures/Impro_K2CRG_K3CRG_1211_m2_55.pdf",width=12,height=4)
+```
+
+
+##END
