@@ -1,0 +1,124 @@
+# Python ignores
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+env/
+venv/
+ENV/
+VENV/
+env.bak/
+venv.bak/
+
+# Python egg metadata
+*.egg-info/
+.installed.cfg
+*.egg
+.eggs/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.pytype/
+
+# mypy
+.mypy_cache/
+
+# Environments
+.env
+.envrc
+*.env
+*.sh
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# R ignores
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+
+# RStudio files
+.Rproj.user/
+.Rproj.user/*
+.Rproj.user/shared/notebooks/*
+.Rproj.user/shared/notebooks/*/*
+*.Rproj
+.Rhistory
+.Rapp.history
+
+# Compiled code
+*.o
+*.so
+*.dll
+*.blg
+*.bbl
+*.hdf5
+*.rlib
+
+# R Packages
+.Rcheck/
+
+# R tests
+/tests/testthat/_snaps/
+
+# Miscellaneous
+.Rhistory
+.RData
+.Ruserdata
+*.dvi
+
+# Knitr files
+*.utf8.md
+*.knit.md
+
+# Temporary files
+*.tmp
+*.temp
+
+# Output files
+*.out
+*.log
+*.aux
+*.toc
+*.pdf
+*.ppt
+*.html
+*.swp
+*.log
+*.aux
+*.blg
+*.bbl
+*.fls
+*.fdb_latexmk
+*.synctex.gz
