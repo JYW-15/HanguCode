@@ -12,7 +12,7 @@ def Patient_scheduling_MIP(n_samp, K, nk, DFF, c_I, c_O, c_W=1, n=16, T=240):
     import numpy as np
     import os
     
-    log_directory = "../RawOutput/Gurobi_MIP_log/"
+    log_directory = "./RawOutput/Gurobi_MIP_log/"
 
     # Create a Gurobi model 
     model = gp.Model("Patient_scheduling_MIP")

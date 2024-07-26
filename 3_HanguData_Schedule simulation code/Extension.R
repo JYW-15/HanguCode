@@ -462,7 +462,7 @@ Plot_GenderK2_Wait_mean_std_Slot_PRO_test <- function(result, Ci) {
     scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, 1)) +
     scale_y_continuous(
       name = ylable1,
-      limits = c(4, 11),  # 设置左边坐标轴范围为4到7
+      limits = c(4, 11),  # Set the left axis range to 4 to 11
       breaks = c(4, 0.5, 7),
       sec.axis = sec_axis(~ ., name = ylable2, breaks = c(7, 0.5, 11))
     ) +
@@ -1545,58 +1545,6 @@ CRG_SimKPIH <- function(CommonServTime,Scenario_list, X_Vec,
   return(df)
 }
 
-# weighted_K2_sd <- function(D1, D2, p1, p2) {
-#   # 计算数据集的大小
-#   n1 <- length(D1)
-#   n2 <- length(D2)
-#   
-#   # 计算数据集的均值
-#   mean_D1 <- mean(D1)
-#   mean_D2 <- mean(D2)
-#   
-#   # 计算数据集的标准差
-#   std_D1 <- sd(D1)
-#   std_D2 <- sd(D2)
-#   
-#   # 计算加权标准差
-#   weighted_std <- sqrt((p1 * (n1 * std_D1^2 + n1 * mean_D1^2) + p2 * (n2 * std_D2^2 + n2 * mean_D2^2)) / (p1 * n1 + p2 * n2) - ((p1 * n1 * mean_D1 + p2 * n2 * mean_D2) / (p1 * n1 + p2 * n2))^2)
-#   
-#   return(weighted_std)
-# }
-# 
-# weighted_K3_sd <- function(D1, D2, D3, p1, p2, p3) {
-#   # 计算数据集的大小
-#   n1 <- length(D1)
-#   n2 <- length(D2)
-#   n3 <- length(D3)
-#   
-#   # 计算数据集的均值
-#   mean_D1 <- mean(D1)
-#   mean_D2 <- mean(D2)
-#   mean_D3 <- mean(D3)
-#   
-#   # 计算数据集的标准差
-#   std_D1 <- sd(D1)
-#   std_D2 <- sd(D2)
-#   std_D3 <- sd(D3)
-#   
-#   # 计算加权标准差
-#   weighted_std <- sqrt((p1 * (n1 * std_D1^2 + n1 * mean_D1^2) + p2 * (n2 * std_D2^2 + n2 * mean_D2^2) + p3 * (n3 * std_D3^2 + n3 * mean_D3^2)) / (p1 * n1 + p2 * n2 + p3 * n3) - ((p1 * n1 * mean_D1 + p2 * n2 * mean_D2 + p3 * n3 * mean_D3) / (p1 * n1 + p2 * n2 + p3 * n3))^2)
-#   
-#   return(weighted_std)
-# }
-
-
-# # # 例如：
-# D1 <- c(1, 2, 3, 4, 5)
-# D2 <- c(6, 7, 8, 9, 10)
-# D3 <- c(11, 12, 13, 14, 15)
-# p1 <- 0.4
-# p2 <- 0.3
-# p3 <- 0.3
-# weighted_std <- weighted_sd(D1, D2, D3, p1, p2, p3)
-# print(paste("三组数据集各自的标准差的加权和为：", weighted_std))
-
 
 calculate_seq <- function(...) {
   args <- list(...)
@@ -1614,7 +1562,7 @@ calculate_seq <- function(...) {
 weighted_K2_sd <- function(D1, D2, p1, p2) {
   # Ref: https://www.statology.org/weighted-standard-deviation-excel/
   # to calculate a weighted standard deviation
-  # 计算数据集的大小
+  # Calculate the size of the data set
   n1 <- length(D1)
   n2 <- length(D2)
   
@@ -1633,7 +1581,7 @@ weighted_K2_sd <- function(D1, D2, p1, p2) {
 }
 
 weighted_K3_sd <- function(D1, D2, D3, p1, p2, p3) {
-  # 计算数据集的大小
+  # Calculate the size of the data set
   n1 <- length(D1)
   n2 <- length(D2)
   n3 <- length(D3)
