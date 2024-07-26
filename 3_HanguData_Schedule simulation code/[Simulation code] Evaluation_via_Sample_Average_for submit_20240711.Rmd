@@ -158,9 +158,9 @@ df11_FullSeq_K2=Scenario11_result$FullSeq
 end.time <- Sys.time()
 time.taken11 <- as.numeric(end.time - start.time, units = "secs")
 print(time.taken11)
-write.csv(df11_FullSeq_K2,file="../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_8_8.csv",row.names = F)
+write.csv(df11_FullSeq_K2,file="../Generated Data/Fullseq2/Model2_55/Fullseq_8_8.csv",row.names = F)
 }else{
-df11_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_8_8.csv",stringsAsFactors = F)
+df11_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/Model2_55/Fullseq_8_8.csv",stringsAsFactors = F)
 # working for loaded df_FullSeq file 
 Scenario11_list_K2=list()
 name_list =sapply(df11_FullSeq_K2[['Rule_name']],function(x) strsplit(x,''))
@@ -201,10 +201,10 @@ file_path <- "./RawOutput/Runtime/K2Full_timeList.txt"
 # Writes the elements in the list to the file as text, setting the separator to a space
 write.table(K2Full_timeList, file = file_path, col.names = TRUE, sep = " ")
 ################################################
-write.csv(df12_FullSeq_K2,file="../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_9_7.csv",row.names = F)
+write.csv(df12_FullSeq_K2,file="../Generated Data/Fullseq2/Model2_55/Fullseq_9_7.csv",row.names = F)
 
 }else{
-df12_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/New_Partition/Model2_55/Fullseq_9_7.csv",stringsAsFactors = F)
+df12_FullSeq_K2 = read.csv("../Generated Data/Fullseq2/Model2_55/Fullseq_9_7.csv",stringsAsFactors = F)
 # working for loaded df_FullSeq file 
 Scenario12_list_K2=list()
 name_list =sapply(df12_FullSeq_K2[['Rule_name']],function(x) strsplit(x,''))
@@ -263,9 +263,9 @@ n2 = 10
 Scenario21_result=FullSeq2Scenariolist(CommonServTime2_K2,Type1, Type2, n1, n2, X_Vec)
 Scenario21_list<-Scenario21_result$Scenariolist
 df21_FullSeq=Scenario21_result$FullSeq
-write.csv(df21_FullSeq,file="../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_6_10.csv",row.names = F)
+write.csv(df21_FullSeq,file="../Generated Data/Fullseq2/Fullseq_NewReturn_6_10.csv",row.names = F)
 }else{
-df21_FullSeq = read.csv("../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_6_10.csv",stringsAsFactors = F)
+df21_FullSeq = read.csv("../Generated Data/Fullseq2/Fullseq_NewReturn_6_10.csv",stringsAsFactors = F)
 # working for loaded df_FullSeq file 
 Scenario21_list=list()
 name_list =sapply(df21_FullSeq[['Rule_name']],function(x) strsplit(x,''))
@@ -292,9 +292,9 @@ n2 = 9
 Scenario22_result=FullSeq2Scenariolist(CommonServTime2_K2,Type1, Type2, n1, n2, X_Vec)
 Scenario22_list<-Scenario22_result$Scenariolist
 df22_FullSeq=Scenario22_result$FullSeq
-write.csv(df22_FullSeq,file="../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_7_9.csv",row.names = F)
+write.csv(df22_FullSeq,file="../Generated Data/Fullseq2/Fullseq_NewReturn_7_9.csv",row.names = F)
 }else{
-df22_FullSeq = read.csv("../Generated Data/Fullseq2/New_Partition/Fullseq_NewReturn_7_9.csv",stringsAsFactors = F)
+df22_FullSeq = read.csv("../Generated Data/Fullseq2/Fullseq_NewReturn_7_9.csv",stringsAsFactors = F)
 # working for loaded df_FullSeq file 
 Scenario22_list=list()
 name_list =sapply(df22_FullSeq[['Rule_name']],function(x) strsplit(x,''))
@@ -1161,10 +1161,10 @@ end.time <- Sys.time()
 time.taken21 <- as.numeric(end.time - start.time, units = "secs")
 print(time.taken21)
 
-write.csv(df11_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_13_3.csv",row.names = F)
+write.csv(df11_FullSeq,file="../Generated Data/Fullseq3/Model2_55/Fullseq_class_0_13_3.csv",row.names = F)
 
 }else{
-df11_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_13_3.csv",stringsAsFactors = F)
+df11_FullSeq = read.csv("../Generated Data/Fullseq3/Model2_55/Fullseq_class_0_13_3.csv",stringsAsFactors = F)
 # working for loaded df file 
 Scenario11_list=list()
 name_list =sapply(df11_FullSeq[['Rule_name']],function(x) strsplit(x,''))
@@ -1196,9 +1196,9 @@ end.time <- Sys.time()
 time.taken22 <- as.numeric(end.time - start.time, units = "secs")
 print(time.taken22)
 
-write.csv(df12_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_14_2.csv",row.names = F)
+write.csv(df12_FullSeq,file="../Generated Data/Fullseq3/Model2_55/Fullseq_class_0_14_2.csv",row.names = F)
 }else{
-df12_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_0_14_2.csv",stringsAsFactors = F)
+df12_FullSeq = read.csv("../Generated Data/Fullseq3/Model2_55/Fullseq_class_0_14_2.csv",stringsAsFactors = F)
 # working for loaded df file 
 Scenario12_list=list()
 name_list =sapply(df12_FullSeq[['Rule_name']],function(x) strsplit(x,''))
@@ -1241,9 +1241,9 @@ file_path <- "./RawOutput/Runtime/K3Full_timeList.txt"
 write.table(K3Full_timeList, file = file_path, col.names = TRUE, sep = " ")
 ##################################################
 
-write.csv(df13_FullSeq,file="../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_1_13_2.csv",row.names = F)
+write.csv(df13_FullSeq,file="../Generated Data/Fullseq3/Model2_55/Fullseq_class_1_13_2.csv",row.names = F)
 }else{
-df13_FullSeq = read.csv("../Generated Data/Fullseq3/New_Partition/Model2_55/Fullseq_class_1_13_2.csv",stringsAsFactors = F)
+df13_FullSeq = read.csv("../Generated Data/Fullseq3/Model2_55/Fullseq_class_1_13_2.csv",stringsAsFactors = F)
 # working for loaded df file 
 Scenario13_list=list()
 name_list =sapply(df13_FullSeq[['Rule_name']],function(x) strsplit(x,''))
